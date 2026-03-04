@@ -122,23 +122,27 @@ def _df_placeholder(msg):
 # ----------------------------
 def test_faostat(area="Egypt", item=None, year=None):
     """
-    Tries FAOSTAT Production_Crops endpoint (fenixservices).
-    Example endpoint used in practice: fenixservices.fao.org/faostat/api/v1/en/Production_Crops/Production
+    Tries FAOSTAT bulk-download API.
+    Falls back to the SWS domain CSV endpoint if the old fenixservices URL fails.
     """
     try:
-        base = "https://fenixservices.fao.org/faostat/api/v1/en/Production_Crops/Production"
-        params = {}
-        if area:
-            params["area"] = area
-        if item:
-            params["item"] = item
+        # Primary: FAOSTAT bulk CSV (more reliable)
+        bulk_url = "https://www.fao.org/faostat/en/#data/QCL"
+        # We use the new REST API with area_codes for Egypt=59
+        base = "https://www.fao.org/faostat/api/v1/en/data/QCL"
+        params = {"area": "59"}  # Egypt country code
         if year:
             params["year"] = str(year)
         logger.info("FAOSTAT: requesting %s params=%s", base, params)
         r = requests.get(base, params=params, timeout=30)
+        if r.status_code != 200:
+            # Fallback: try fenixservices
+            base2 = "https://fenixservices.fao.org/faostat/api/v1/en/data/QCL"
+            logger.info("FAOSTAT fallback: %s", base2)
+            r = requests.get(base2, params=params, timeout=30)
         r.raise_for_status()
         j = r.json()
-        data = j.get("data") or []
+        data = j.get("data") or j.get("Data") or []
         if not data:
             return _df_placeholder("FAOSTAT returned no rows for query. Try different area/item/year.")
         df = pd.DataFrame(data)
@@ -154,23 +158,29 @@ def test_faostat(area="Egypt", item=None, year=None):
 # ----------------------------
 def test_egypt_opendata():
     """
-    Many gov/open-data portals use CKAN. This function tries CKAN package_list and returns a small sample.
+    Tries multiple Egyptian open-data portals.
     """
-    try:
-        base = "https://egypt.opendataforafrica.org/api/3/action/package_list"
-        logger.info("Egypt Open Data: requesting CKAN package_list")
-        r = requests.get(base, timeout=30)
-        r.raise_for_status()
-        j = r.json()
-        if not j.get("success"):
-            return _df_placeholder("Egypt Open Data portal did not return success. Inspect manually.")
-        packages = j.get("result", [])[:50]
-        df = pd.DataFrame({"package_id": packages})
-        df.attrs["source"] = "Egypt Open Data"
-        return df
-    except Exception as e:
-        logger.exception("Egypt Open Data test failed")
-        return _df_placeholder(f"Egypt Open Data error: {e}")
+    urls = [
+        "https://egypt.opendataforafrica.org/api/3/action/package_list",
+        "https://data.gov.eg/api/3/action/package_list",
+    ]
+    for base in urls:
+        try:
+            logger.info("Egypt Open Data: trying %s", base)
+            r = requests.get(base, timeout=15)
+            if r.status_code != 200:
+                continue
+            j = r.json()
+            if not j.get("success"):
+                continue
+            packages = j.get("result", [])[:50]
+            df = pd.DataFrame({"package_id": packages})
+            df.attrs["source"] = "Egypt Open Data"
+            return df
+        except Exception as e:
+            logger.warning("Egypt Open Data URL %s failed: %s", base, e)
+            continue
+    return _df_placeholder("Egypt Open Data: no portal responded. May require VPN or manual access.")
 
 
 # ----------------------------
@@ -329,11 +339,18 @@ def test_era5_cds(area=[32, 24, 22, 36], year="2023"):
         logger.warning("cdsapi/xarray not available: %s", e)
         return _df_placeholder("cdsapi/xarray not installed. pip install cdsapi xarray netCDF4 and configure .cdsapirc.")
 
+    # Check if API key is configured
+    api_key = os.environ.get("CDSAPI_KEY", "")
+    if not api_key:
+        return _df_placeholder("CDSAPI_KEY not set. Register at https://cds.climate.copernicus.eu and set CDSAPI_KEY in .env")
+
     try:
-        c = cdsapi.Client()
+        # Use the correct v3 API URL
+        api_url = os.environ.get("CDSAPI_URL", "https://cds.climate.copernicus.eu/api")
+        c = cdsapi.Client(url=api_url, key=api_key)
     except Exception as e:
         logger.exception("CDSAPI client creation failed")
-        return _df_placeholder("CDSAPI client failed. Ensure ~/.cdsapirc with url:key is present.")
+        return _df_placeholder("CDSAPI client failed. Ensure CDSAPI_URL and CDSAPI_KEY are correctly set in .env")
 
     # We'll try to request a single day to keep it small
     try:
@@ -415,7 +432,7 @@ def test_gadm(country_iso="EGY"):
     for url in urls:
         try:
             logger.info("Attempting to download GADM from %s", url)
-            r = requests.get(url, stream=True, timeout=30)
+            r = requests.get(url, stream=True, timeout=60)
             if r.status_code != 200:
                 logger.warning("GADM url %s returned %s", url, r.status_code)
                 continue
