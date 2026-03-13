@@ -30,7 +30,7 @@ The platform consists of **5 Dockerized Containers** orchestrated via `docker-co
 
 4. **`agri_mysql`** (Relational Database)
    - **Tech Stack**: MySQL 8.0
-   - **Role**: Primary data store for the application. Data is persistently stored in a Docker volume (`mysql_data`).
+   - **Role**: Primary data store for the application. Data is persistently stored in a Docker volume (`mysql_data`). Isolated within its own `Database/` directory to manage initialisation and schemas.
    - **Host Port Mapping**: `3307` (Mapped from internal `3306` to avoid conflicts with host databases)
 
 5. **`agri_cv`** (Computer Vision Worker Environment)
@@ -75,7 +75,10 @@ Smart-Agriculture-Data-Platform/
 │   │
 │   └── opencv/                  # Standalone OpenCV processing logic
 │
-├── Database/                    # Database schemas, migrations, or dumps
+├── Database/                    # Dedicated Database architecture
+│   ├── Dockerfile               # MySQL 8 Custom Image mapping
+│   ├── init.sql                 # Baseline table initialization script
+│   └── (migrations/seeds)       # Future room for Alembic or schema dumps
 ├── documents/                   # General platform documentation
 └── release/                     # Production build artifacts
 ```
@@ -108,3 +111,5 @@ docker compose down
 *   **Decoupled Architecture**: Removed Celery, Redis, and MinIO components. The platform is now completely stateless and data interactions are handled directly through FastAPI endpoints.
 *   **Vite Integration**: React Frontend has been migrated from Webpack/CRA to Vite for significantly faster development builds.
 *   **Timeout Resiliency**: Python dependencies are fetched with extended timeout parameters to reliably fetch heavy data science libraries like `pandas` and `scikit-learn`.
+*   **Database Isolation**: Extracted MySQL initialization into its own container context under `Database/` allowing custom SQL seeding before mount.
+*   **MySQL Authentication Fix**: Implemented the `cryptography` dependency in the backend to natively resolve MySQL 8's newer `caching_sha2_password` standard when making SQLAlchemy connections.

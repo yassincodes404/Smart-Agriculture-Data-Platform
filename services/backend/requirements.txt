@@ -7,6 +7,7 @@ python-dotenv
 sqlalchemy
 alembic
 pymysql
+cryptography
 
 pandas
 numpy

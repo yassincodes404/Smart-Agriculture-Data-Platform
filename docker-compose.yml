@@ -3,7 +3,7 @@ version: "3.9"
 services:
 
   mysql:
-    image: mysql:8
+    build: ./Database
     container_name: agri_mysql
     restart: always
     env_file:
@@ -12,6 +12,7 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
+      - ./Database/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   backend:
     build: ./services/backend
