@@ -113,3 +113,5 @@ docker compose down
 *   **Timeout Resiliency**: Python dependencies are fetched with extended timeout parameters to reliably fetch heavy data science libraries like `pandas` and `scikit-learn`.
 *   **Database Isolation**: Extracted MySQL initialization into its own container context under `Database/` allowing custom SQL seeding before mount.
 *   **MySQL Authentication Fix**: Implemented the `cryptography` dependency in the backend to natively resolve MySQL 8's newer `caching_sha2_password` standard when making SQLAlchemy connections.
+*   **Vite Hot-Reload in Docker**: Configured explicit filesystem polling in Vite and `docker-compose.yml` to ensure instantaneous HMR directly from Windows host down through the Linux container.
+*   **Nginx Reverse Proxy & WebSocket**: Finalized Nginx gateway with clean `/api/` routing that preserves path configurations, as well as implemented active WebSocket proxying to support frontend Vite hot-reloading reliably.

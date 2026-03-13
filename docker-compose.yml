@@ -37,6 +37,9 @@ services:
   frontend:
     build: ./services/frontend/web
     container_name: agri_frontend
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
     volumes:
       - ./services/frontend/web:/app
       - /app/node_modules
