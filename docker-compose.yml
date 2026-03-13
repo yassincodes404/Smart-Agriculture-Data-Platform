@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+
+  mysql:
+    image: mysql:8
+    container_name: agri_mysql
+    restart: always
+    env_file:
+      - .env.db
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  backend:
+    build: ./services/backend
+    container_name: agri_backend
+    env_file:
+      - .env.backend
+    volumes:
+      - ./services/backend/app:/app/app
+      - ./data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      - mysql
+
+  opencv:
+    build: ./services/opencv
+    container_name: agri_cv
+    tty: true
+    volumes:
+      - ./data/images:/images
+
+  frontend:
+    build: ./services/frontend/web
+    container_name: agri_frontend
+    volumes:
+      - ./services/frontend/web:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+
+  nginx:
+    build: ./infra/nginx
+    container_name: agri_nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  mysql_data:
