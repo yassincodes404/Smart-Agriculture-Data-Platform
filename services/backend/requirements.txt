@@ -24,3 +24,5 @@ requests
 python-multipart
 
 pytest
+pytest-asyncio
+pytest-mock
