@@ -60,6 +60,5 @@ _archive_backup_*
 
 # Project Specific
 data/
-Database/
 !data/.gitkeep
 !Database/.gitkeep
