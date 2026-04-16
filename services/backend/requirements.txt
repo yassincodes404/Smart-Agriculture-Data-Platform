@@ -3,6 +3,7 @@ uvicorn[standard]
 
 pydantic
 pydantic-settings
+email-validator
 python-dotenv
 
 sqlalchemy
