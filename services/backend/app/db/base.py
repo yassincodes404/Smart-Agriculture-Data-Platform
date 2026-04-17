@@ -9,3 +9,7 @@ Add every new model import below as the project grows.
 """
 
 from app.models.user import Base, User  # noqa: F401
+from app.models.location import Location  # noqa: F401
+from app.models.ingestion_batch import IngestionBatch  # noqa: F401
+from app.models.etl_error import EtlError  # noqa: F401
+from app.models.climate_record import ClimateRecord  # noqa: F401
