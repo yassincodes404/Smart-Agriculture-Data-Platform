@@ -11,6 +11,13 @@ export default defineConfig({
     watch: {
       usePolling: true,
       interval: 1000,
-    }
-  }
+    },
+    // Proxy API requests to the backend (for local dev without Nginx)
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
+  },
 })
