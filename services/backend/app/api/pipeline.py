@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_db
 from app.pipeline.climate_pipeline import run_climate_ingestion
-from app.search.climate_loader import list_available_files
+from app.pipeline.water_pipeline import run_water_ingestion
+from app.search.climate_loader import list_available_files as list_climate_files_loader
+from app.search.water_loader import list_available_files as list_water_files_loader
 from app.models.ingestion_batch import IngestionBatch
 
 router = APIRouter(prefix="/pipeline", tags=["Data Pipeline"])
@@ -76,7 +78,56 @@ def list_climate_files():
     List all CSV files available in data/csv/ that can be used
     as input for the climate pipeline.
     """
-    files = list_available_files()
+    files = list_climate_files_loader()
+    return {
+        "status": "success",
+        "data": files,
+        "meta": {"count": len(files)},
+    }
+
+
+@router.post(
+    "/water/run",
+    status_code=status.HTTP_201_CREATED,
+    summary="Run the water data ingestion pipeline",
+)
+def trigger_water_pipeline(
+    filename: str = Query(
+        "egypt_crop_water_use.csv",
+        description="CSV filename inside data/csv/ to ingest",
+    ),
+    db: Session = Depends(get_db),
+):
+    try:
+        result = run_water_ingestion(db, filename=filename)
+        return {
+            "status": "success",
+            "message": f"Pipeline completed with status: {result['status']}",
+            "data": result,
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Pipeline failed: {str(e)}",
+        )
+
+
+@router.get(
+    "/water/files",
+    summary="List available water CSV files",
+)
+def list_water_files():
+    files = list_water_files_loader()
     return {
         "status": "success",
         "data": files,

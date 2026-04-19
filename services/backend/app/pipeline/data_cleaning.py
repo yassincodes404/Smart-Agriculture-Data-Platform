@@ -132,3 +132,57 @@ def clean_climate_batch(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         List of cleaned records.
     """
     return [clean_climate_record(r) for r in records]
+
+
+# Known irrigation type aliases
+_IRRIGATION_ALIASES: Dict[str, str] = {
+    "drip irrigation": "drip",
+    "flood irrigation": "flood",
+    "sprinkler irrigation": "sprinkler",
+    "pivot": "sprinkler",
+}
+
+
+def clean_water_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Apply minimal standardisation to a single water record.
+
+    Operations:
+    - Normalise governorate name
+    - Title-case crop name
+    - Ensure numeric types for year and water_consumption_m3
+    - Normalise irrigation type
+
+    Args:
+        record: Raw parsed record dict.
+
+    Returns:
+        Cleaned record dict (new copy).
+    """
+    cleaned = {}
+
+    raw_gov = record.get("governorate", "")
+    cleaned["governorate"] = normalise_governorate(str(raw_gov))
+
+    cleaned["crop"] = str(record.get("crop", "")).strip().title()
+
+    cleaned["year"] = int(record["year"])
+    cleaned["water_consumption_m3"] = float(record["water_consumption_m3"])
+
+    raw_irr = str(record.get("irrigation_type", "")).strip().lower()
+    cleaned["irrigation_type"] = _IRRIGATION_ALIASES.get(raw_irr, raw_irr)
+
+    return cleaned
+
+
+def clean_water_batch(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Clean an entire batch of water records.
+
+    Args:
+        records: List of raw parsed records.
+
+    Returns:
+        List of cleaned records.
+    """
+    return [clean_water_record(r) for r in records]

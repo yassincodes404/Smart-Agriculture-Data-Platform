@@ -11,6 +11,7 @@ from app.models.ingestion_batch import IngestionBatch
 from app.models.etl_error import EtlError
 from app.models.location import Location
 from app.models.climate_record import ClimateRecord
+from app.models.water_record import WaterRecord
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -59,6 +60,27 @@ def insert_climate_record(db: Session, record_data: dict, batch_id: int, locatio
             year=record_data["year"],
             temperature_mean=record_data["temperature_mean"],
             humidity_pct=record_data["humidity_pct"],
+            batch_id=batch_id,
+            source_system="CSV_Upload",
+            ingestion_timestamp=_utcnow()
+        )
+        db.add(record)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        err_msg = str(e)
+        log_error(db, batch_id, "DB_INSERT", err_msg, str(record_data))
+        raise e
+
+
+def insert_water_record(db: Session, record_data: dict, batch_id: int, location_id: int):
+    try:
+        record = WaterRecord(
+            location_id=location_id,
+            crop=record_data["crop"],
+            year=record_data["year"],
+            water_consumption_m3=record_data["water_consumption_m3"],
+            irrigation_type=record_data["irrigation_type"],
             batch_id=batch_id,
             source_system="CSV_Upload",
             ingestion_timestamp=_utcnow()
