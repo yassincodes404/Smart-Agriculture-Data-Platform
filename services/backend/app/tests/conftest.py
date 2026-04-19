@@ -9,28 +9,35 @@ The entire stack is wired together:
   - In-memory SQLite creates all tables via Base.metadata.create_all()
   - The FastAPI get_db() dependency is overridden to use the test session
   - Each test function gets a fresh isolated database state
+
+`DATABASE_URL` is set before importing the app so `SessionLocal()` (used by
+BackgroundTasks in land discovery) hits the same engine as fixtures.
 """
+
+import os
+
+os.environ["DATABASE_URL"] = "sqlite://"
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+import app.db.session as db_session_module
+
+db_session_module._engine = None
+db_session_module._SessionLocal = None
 
 from app.db.base import Base  # ensures all models are registered
 from app.core.dependencies import get_db
 from app.core import security
+from app.db.session import get_engine
 from app.main import app
 
 # ---------------------------------------------------------------------------
-# Test database — SQLite in-memory (no Docker required)
+# Test database — shared in-memory SQLite (no Docker / no pymysql required)
 # ---------------------------------------------------------------------------
 
-SQLALCHEMY_TEST_URL = "sqlite:///./test.db"
-
-test_engine = create_engine(
-    SQLALCHEMY_TEST_URL,
-    connect_args={"check_same_thread": False},  # required for SQLite
-)
+test_engine = get_engine()
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
 
 

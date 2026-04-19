@@ -25,6 +25,7 @@ from app.api.users import router as users_router
 from app.api.climate import router as climate_router
 from app.api.ingestion import router as ingestion_router
 from app.api.pipeline import router as pipeline_router
+from app.api.lands import router as lands_router
 
 # ---------------------------------------------------------------------------
 # App initialisation
@@ -86,4 +87,5 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(climate_router, prefix="/api/v1")
 app.include_router(ingestion_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v1")
+app.include_router(lands_router, prefix="/api/v1")
 

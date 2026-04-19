@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # External services
     OPENAI_API_KEY: str = ""
     LOG_LEVEL: str = "INFO"
+    LAND_MONITOR_INTERVAL_MINUTES: int = 1440
 
     model_config = {"env_file": ".env.backend", "extra": "ignore"}
 

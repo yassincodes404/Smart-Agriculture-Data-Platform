@@ -26,6 +26,7 @@ scikit-learn
 
 httpx
 requests
+apscheduler
 
 pytest
 pytest-asyncio

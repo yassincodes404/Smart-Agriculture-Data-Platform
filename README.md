@@ -8,7 +8,7 @@ The project was recently restructured to provide a clean, microservices-oriented
 
 ### Core Services
 
-The platform consists of **5 Dockerized Containers** orchestrated via `docker-compose`:
+The platform consists of **6 Dockerized Containers** orchestrated via `docker-compose`:
 
 1. **`agri_nginx`** (Reverse Proxy)
    - **Tech Stack**: NGINX
@@ -33,7 +33,12 @@ The platform consists of **5 Dockerized Containers** orchestrated via `docker-co
    - **Role**: Primary data store for the application. Data is persistently stored in a Docker volume (`mysql_data`). Isolated within its own `Database/` directory to manage initialisation and schemas.
    - **Host Port Mapping**: `3307` (Mapped from internal `3306` to avoid conflicts with host databases)
 
-5. **`agri_cv`** (Computer Vision Worker Environment)
+5. **`agri_scheduler`** (Background Monitoring Scheduler)
+   - **Tech Stack**: Python 3.11, APScheduler, SQLAlchemy
+   - **Role**: Runs scheduled land-monitoring pipeline jobs and keeps geospatial time-series tables updated.
+   - **Deployment Model**: Reuses the backend image with a scheduler entrypoint (`python -m app.scheduler.runner`).
+
+6. **`agri_cv`** (Computer Vision Worker Environment)
    - **Tech Stack**: Python 3.11, OpenCV, Pillow, NumPy
    - **Role**: A standalone Python environment explicitly designed for heavy image processing tasks and computer vision algorithms. It mounts local image directories to operate on raw visual data.
 
@@ -78,6 +83,7 @@ Smart-Agriculture-Data-Platform/
 ├── Database/                    # Dedicated Database architecture
 │   ├── Dockerfile               # MySQL 8 Custom Image mapping
 │   ├── init.sql                 # Baseline table initialization script
+│   ├── geospatial_schema.sql    # Land-centric schema bootstrap script
 │   └── (migrations/seeds)       # Future room for Alembic or schema dumps
 ├── documents/                   # General platform documentation
 └── release/                     # Production build artifacts
@@ -112,6 +118,8 @@ docker compose down
 *   **Vite Integration**: React Frontend has been migrated from Webpack/CRA to Vite for significantly faster development builds.
 *   **Timeout Resiliency**: Python dependencies are fetched with extended timeout parameters to reliably fetch heavy data science libraries like `pandas` and `scikit-learn`.
 *   **Database Isolation**: Extracted MySQL initialization into its own container context under `Database/` allowing custom SQL seeding before mount.
+*   **Geospatial Schema Sync**: Added a dedicated geospatial schema bootstrap script and synchronized backend model scaffolding for `Land`-centric tables.
+*   **Scheduler in Docker**: Added a scheduler container that shares backend code and data volumes to run monitoring jobs in a Docker-native way.
 *   **MySQL Authentication Fix**: Implemented the `cryptography` dependency in the backend to natively resolve MySQL 8's newer `caching_sha2_password` standard when making SQLAlchemy connections.
 *   **Vite Hot-Reload in Docker**: Configured explicit filesystem polling in Vite and `docker-compose.yml` to ensure instantaneous HMR directly from Windows host down through the Linux container.
 *   **Nginx Reverse Proxy & WebSocket**: Finalized Nginx gateway with clean `/api/` routing that preserves path configurations, as well as implemented active WebSocket proxying to support frontend Vite hot-reloading reliably.

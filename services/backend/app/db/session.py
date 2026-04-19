@@ -25,7 +25,6 @@ DB_PORT = os.getenv("MYSQL_PORT", "3306")
 DB_NAME = os.getenv("MYSQL_DATABASE", "agriculture")
 
 _default_url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-DATABASE_URL = os.getenv("DATABASE_URL", _default_url)
 
 # ---------------------------------------------------------------------------
 # Lazy engine + session factory
@@ -39,7 +38,16 @@ def get_engine():
     """Return (creating if necessary) the SQLAlchemy engine."""
     global _engine
     if _engine is None:
-        _engine = create_engine(DATABASE_URL, echo=False)
+        url = os.getenv("DATABASE_URL", _default_url)
+        engine_kwargs: dict = {"echo": False}
+        if url.startswith("sqlite"):
+            engine_kwargs["connect_args"] = {"check_same_thread": False}
+            # In-memory SQLite shared across threads (FastAPI BackgroundTasks + TestClient).
+            if url in ("sqlite://", "sqlite:///:memory:"):
+                from sqlalchemy.pool import StaticPool
+
+                engine_kwargs["poolclass"] = StaticPool
+        _engine = create_engine(url, **engine_kwargs)
     return _engine
 
 
@@ -72,4 +80,4 @@ class _LazySessionLocal:
         return getattr(get_session_factory(), name)
 
 
-SessionLocal = _LazySessionLocal()
+SessionLocal = _LazySessionLocal()

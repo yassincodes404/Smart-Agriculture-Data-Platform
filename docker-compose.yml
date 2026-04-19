@@ -12,7 +12,8 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./Database/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./Database/init.sql:/docker-entrypoint-initdb.d/00_init.sql
+      - ./Database/geospatial_schema.sql:/docker-entrypoint-initdb.d/20_geospatial_schema.sql
 
   backend:
     build: ./services/backend
@@ -24,6 +25,18 @@ services:
       - ./data:/data
     ports:
       - "8000:8000"
+    depends_on:
+      - mysql
+
+  scheduler:
+    build: ./services/backend
+    container_name: agri_scheduler
+    env_file:
+      - .env.backend
+    command: ["python", "-m", "app.scheduler.runner"]
+    volumes:
+      - ./services/backend/app:/app/app
+      - ./data:/data
     depends_on:
       - mysql
 
