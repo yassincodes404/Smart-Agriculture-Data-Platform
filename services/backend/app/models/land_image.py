@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.types import JSON as SAJSON
 
@@ -22,4 +22,6 @@ class LandImage(Base):
     image_path = Column(String(500), nullable=False)
     image_type = Column(String(100), nullable=False)
     cv_analysis_summary = Column(SAJSON().with_variant(JSON, "mysql"), nullable=True)
+    ndvi_mean = Column(Numeric(6, 4), nullable=True)       # Mean NDVI for this image
+    cloud_cover_pct = Column(Numeric(5, 2), nullable=True) # Cloud coverage percentage
     source_id = Column(Integer, ForeignKey("data_sources.source_id"), nullable=True)

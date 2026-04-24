@@ -99,3 +99,99 @@ CREATE TABLE IF NOT EXISTS analytics_summaries (
     FOREIGN KEY (source_id) REFERENCES data_sources(source_id),
     INDEX idx_analytics_summaries_land_time (land_id, timestamp)
 );
+
+-- ============================================================================
+-- Phase 1: Decision Engine column extensions
+-- ============================================================================
+
+-- land_crops: growth stage tracking
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_crops' AND COLUMN_NAME = 'growth_stage');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_crops ADD COLUMN growth_stage VARCHAR(50) NULL AFTER estimated_yield_tons',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_crops' AND COLUMN_NAME = 'ndvi_trend');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_crops ADD COLUMN ndvi_trend VARCHAR(20) NULL AFTER growth_stage',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_crops' AND COLUMN_NAME = 'confidence');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_crops ADD COLUMN confidence DECIMAL(5,4) NULL AFTER ndvi_trend',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- land_water: FAO water requirement + efficiency
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_water' AND COLUMN_NAME = 'crop_water_requirement_mm');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_water ADD COLUMN crop_water_requirement_mm DECIMAL(10,4) NULL AFTER irrigation_status',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_water' AND COLUMN_NAME = 'water_efficiency_ratio');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_water ADD COLUMN water_efficiency_ratio DECIMAL(10,4) NULL AFTER crop_water_requirement_mm',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- land_soil: soil quality indicators
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_soil' AND COLUMN_NAME = 'ph_level');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_soil ADD COLUMN ph_level DECIMAL(5,2) NULL AFTER soil_type',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_soil' AND COLUMN_NAME = 'organic_matter_pct');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_soil ADD COLUMN organic_matter_pct DECIMAL(5,2) NULL AFTER ph_level',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_soil' AND COLUMN_NAME = 'suitability_score');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_soil ADD COLUMN suitability_score DECIMAL(5,2) NULL AFTER organic_matter_pct',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- land_images: NDVI and cloud cover metadata
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_images' AND COLUMN_NAME = 'ndvi_mean');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_images ADD COLUMN ndvi_mean DECIMAL(6,4) NULL AFTER cv_analysis_summary',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'land_images' AND COLUMN_NAME = 'cloud_cover_pct');
+SET @sql = IF(@col_exists = 0,
+    'ALTER TABLE land_images ADD COLUMN cloud_cover_pct DECIMAL(5,2) NULL AFTER ndvi_mean',
+    'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- land_alerts: anomalies & risk alerts
+CREATE TABLE IF NOT EXISTS land_alerts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    land_id BIGINT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    alert_type VARCHAR(100) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    message TEXT NOT NULL,
+    payload JSON NULL,
+    resolved_at TIMESTAMP NULL,
+    source_id BIGINT NULL,
+    FOREIGN KEY (land_id) REFERENCES lands(land_id),
+    FOREIGN KEY (source_id) REFERENCES data_sources(source_id),
+    INDEX idx_land_alerts_land_time (land_id, timestamp),
+    INDEX idx_land_alerts_severity (severity)
+);
+

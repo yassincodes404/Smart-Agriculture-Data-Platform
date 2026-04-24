@@ -1,31 +1,39 @@
-"""Tests for land discovery, Open-Meteo climate snapshot, and timeseries."""
+"""Tests for land discovery (GeoJSON polygon), Open-Meteo climate snapshot, and timeseries."""
 
 from unittest.mock import patch
 
 import pytest
 
+from app.lands.geometry import circle_to_polygon
 from app.models.land import Land
 
 pytestmark = pytest.mark.usefixtures("_mock_open_meteo_snapshot")
+
+# Shared minimal polygon for tests that only care about land_id
+_MINIMAL_POLYGON = {
+    "type": "Polygon",
+    "coordinates": [[
+        [31.0, 30.0], [31.1, 30.0], [31.1, 30.1], [31.0, 30.1],
+    ]],
+}
 
 
 @pytest.fixture
 def _mock_open_meteo_snapshot():
     """Avoid real HTTP in CI; discovery pipeline imports this symbol."""
-    fake = {
-        "temperature_celsius": 22.5,
-        "humidity_pct": 55.0,
-        "rainfall_mm": 0.1,
-    }
-    path = "app.pipeline.land_discovery_pipeline.open_meteo.fetch_current_land_climate"
-    with patch(path, return_value=fake) as m:
-        yield m
+    fake = {"temperature_celsius": 22.5, "humidity_pct": 55.0, "rainfall_mm": 0.1}
+    soil = {"date": "2026-04-24", "et0_mm_per_day": 5.0, "soil_moisture_pct": 28.0}
+    with patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_current_land_climate",
+               return_value=fake), \
+         patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_soil_and_et0",
+               return_value=soil):
+        yield
 
 
 def test_discover_land_returns_202(client, db_session):
     resp = client.post(
         "/api/v1/lands/discover",
-        json={"latitude": 30.0444, "longitude": 31.2357, "name": "Nile Delta Plot 1"},
+        json={"name": "Nile Delta Plot 1", "geometry": _MINIMAL_POLYGON},
     )
     assert resp.status_code == 202
     body = resp.json()
@@ -44,7 +52,7 @@ def test_timeseries_unknown_land(client, db_session):
 def test_timeseries_climate_returns_points_after_discovery(client, db_session):
     discover = client.post(
         "/api/v1/lands/discover",
-        json={"latitude": 29.0, "longitude": 30.0, "name": "Test"},
+        json={"name": "Test", "geometry": _MINIMAL_POLYGON},
     )
     land_id = discover.json()["land_id"]
     resp = client.get(f"/api/v1/lands/{land_id}/timeseries?metric=climate")
@@ -60,11 +68,13 @@ def test_timeseries_climate_returns_points_after_discovery(client, db_session):
 
 
 def test_timeseries_climate_empty_when_connector_returns_none(client, db_session):
-    path = "app.pipeline.land_discovery_pipeline.open_meteo.fetch_current_land_climate"
-    with patch(path, return_value=None):
+    with patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_current_land_climate",
+               return_value=None), \
+         patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_soil_and_et0",
+               return_value=None):
         discover = client.post(
             "/api/v1/lands/discover",
-            json={"latitude": 24.7, "longitude": 46.7, "name": "No weather"},
+            json={"name": "No weather", "geometry": _MINIMAL_POLYGON},
         )
     land_id = discover.json()["land_id"]
     resp = client.get(f"/api/v1/lands/{land_id}/timeseries?metric=climate")

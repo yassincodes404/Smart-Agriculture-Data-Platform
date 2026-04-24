@@ -26,6 +26,7 @@ class Land(Base):
     latitude = Column(Numeric(10, 8), nullable=False)
     longitude = Column(Numeric(11, 8), nullable=False)
     boundary_polygon = Column(SAJSON().with_variant(JSON, "mysql"), nullable=True)
+    area_hectares = Column(Numeric(12, 4), nullable=True)
     description = Column(Text, nullable=True)
     status = Column(String(32), nullable=False, default="processing")
     created_at = Column(DateTime, default=_utcnow, nullable=False)

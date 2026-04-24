@@ -26,6 +26,22 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LAND_MONITOR_INTERVAL_MINUTES: int = 1440
 
+    # Sentinel-2 / Copernicus Data Space
+    COPERNICUS_CLIENT_ID: str = ""
+    COPERNICUS_CLIENT_SECRET: str = ""
+
+    # Satellite monitoring
+    SATELLITE_IMAGE_INTERVAL_DAYS: int = 5
+    SATELLITE_MAX_CLOUD_COVER_PCT: float = 30.0
+
+    # Analysis thresholds
+    NDVI_ANOMALY_DROP_THRESHOLD: float = 0.15
+    CLIMATE_STRESS_TEMP_THRESHOLD: float = 40.0
+    DROUGHT_RAINFALL_THRESHOLD_MM: float = 2.0
+
+    # Reference data path
+    CROP_PROFILES_PATH: str = "data/reference/crop_profiles.json"
+
     model_config = {"env_file": ".env.backend", "extra": "ignore"}
 
 
