@@ -1,13 +1,17 @@
 """
 land_discovery_pipeline.py
 --------------------------
-Phase 2 async fan-out: geo validation, connectors, CV, ETL, modular inserts.
+Full discovery fan-out: connectors, NDVI backfill, Soil profile, ETL, modular inserts.
 
 Runs outside the HTTP request (BackgroundTasks or worker). Uses its own DB session.
 
 Real data fetched at discovery:
-  1. Climate snapshot         → land_climate   (Open-Meteo current)
-  2. Soil moisture + ET₀      → land_water (ET₀), land_soil (moisture)  (Open-Meteo archive)
+  Step 1. Climate snapshot         → land_climate   (Open-Meteo current)
+  Step 2. Soil moisture + ET₀      → land_water, land_soil  (Open-Meteo archive)
+  Step 3. NDVI history backfill    → land_crops  (MODIS MOD13Q1, last 90 days)
+  Step 4. Static soil profile      → land_soil_profiles  (ISRIC SoilGrids v2)
+  Step 5. High-Res Satellite       → land_images  (Sentinel-2 via Planetary Computer)
+  Step 6. Mark land active
 """
 
 import logging
@@ -87,7 +91,35 @@ def execute(land_id: int, db: Session) -> None:
             logger.exception("soil/ET₀ connector failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
-        # Step 3: Mark land active
+        # Step 3: NDVI history backfill (last 90 days from MODIS MOD13Q1)
+        # ------------------------------------------------------------------
+        try:
+            from app.tasks.satellite_task import run_ndvi_history_backfill
+            inserted = run_ndvi_history_backfill(land_id, db, days=90)
+            logger.info("NDVI backfill complete land_id=%s  records=%d", land_id, inserted)
+        except Exception:
+            logger.exception("NDVI backfill failed land_id=%s (continuing)", land_id)
+
+        # ------------------------------------------------------------------
+        # Step 4: Static soil profile (ISRIC SoilGrids v2)
+        # ------------------------------------------------------------------
+        try:
+            from app.tasks.soil_task import run_soil_profile_task
+            run_soil_profile_task(land_id, db)
+        except Exception:
+            logger.exception("soil profile task failed land_id=%s (continuing)", land_id)
+
+        # ------------------------------------------------------------------
+        # Step 5: High-Res Satellite Visuals (Sentinel-2)
+        # ------------------------------------------------------------------
+        try:
+            from app.tasks.sentinel_task import run_sentinel_visual_fetch
+            run_sentinel_visual_fetch(land_id, db)
+        except Exception:
+            logger.exception("Sentinel visual task failed land_id=%s (continuing)", land_id)
+
+        # ------------------------------------------------------------------
+        # Step 6: Mark land active
         # ------------------------------------------------------------------
         repository.update_land_status(db, land_id, "active")
         db.commit()

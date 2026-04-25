@@ -224,6 +224,13 @@ class TestFetchHistoricalClimateUnit:
 class TestDiscoveryPipelineWithSoilET0:
     """Verify that discovery now also writes soil + water rows from real connectors."""
 
+    _POLYGON = {
+        "type": "Polygon",
+        "coordinates": [[
+            [31.0, 30.0], [31.1, 30.0], [31.1, 30.1], [31.0, 30.1],
+        ]],
+    }
+
     def test_discovery_writes_soil_and_water_rows(self, client, db_session):
         """
         When fetch_soil_and_et0 returns data, discovery should write to land_soil
@@ -241,7 +248,7 @@ class TestDiscoveryPipelineWithSoilET0:
 
             resp = client.post(
                 "/api/v1/lands/discover",
-                json={"latitude": 30.0, "longitude": 31.0, "name": "Delta Farm"},
+                json={"name": "Delta Farm", "geometry": self._POLYGON},
             )
         assert resp.status_code == 202
         land_id = resp.json()["land_id"]
@@ -270,11 +277,10 @@ class TestDiscoveryPipelineWithSoilET0:
                    return_value=None):
             resp = client.post(
                 "/api/v1/lands/discover",
-                json={"latitude": 26.0, "longitude": 32.0, "name": "Test Fallback"},
+                json={"name": "Test Fallback", "geometry": self._POLYGON},
             )
 
         assert resp.status_code == 202
-        # Land should still be discoverable — pipeline should have completed
         land_id = resp.json()["land_id"]
         from app.models.land import Land
         land = db_session.get(Land, land_id)

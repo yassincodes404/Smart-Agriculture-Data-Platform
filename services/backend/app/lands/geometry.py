@@ -157,3 +157,20 @@ def circle_to_polygon(
         ])
 
     return close_ring(coords)
+
+
+def compute_bounding_box(ring: Ring) -> list[float]:
+    """
+    Compute the bounding box of a polygon ring.
+    
+    Returns a list: [min_lon, min_lat, max_lon, max_lat]
+    """
+    if not ring:
+        raise ValueError("Cannot compute bounding box for an empty ring")
+        
+    min_lon = min(p[0] for p in ring)
+    max_lon = max(p[0] for p in ring)
+    min_lat = min(p[1] for p in ring)
+    max_lat = max(p[1] for p in ring)
+    
+    return [min_lon, min_lat, max_lon, max_lat]

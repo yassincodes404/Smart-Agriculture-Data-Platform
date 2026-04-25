@@ -95,8 +95,9 @@ class TestLandDiscoverWithPolygon:
         land_id = resp.json()["land_id"]
         land = db_session.get(Land, land_id)
         assert land.area_hectares is not None
-        # 0.1° × 0.1° square at 30°N ≈ 100 ha, allow wide range
-        assert 50 < float(land.area_hectares) < 200
+        # 0.1° × 0.1° square at 30°N:
+        # 0.1° lat ≈ 11.1 km, 0.1° lng ≈ 9.6 km → area ≈ 107 km² = 10,700 ha
+        assert 5_000 < float(land.area_hectares) < 15_000
 
     def test_open_ring_is_automatically_closed(self, client, db_session):
         """Backend should close the ring even if frontend didn't send closing point."""

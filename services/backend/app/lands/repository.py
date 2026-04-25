@@ -139,8 +139,10 @@ def insert_land_crop_snapshot(
     return row
 
 
-def list_land_crop_rows(db: Session, land_id: int) -> Sequence[LandCrop]:
+def list_land_crop_rows(db: Session, land_id: int, limit: Optional[int] = None) -> Sequence[LandCrop]:
     stmt = select(LandCrop).where(LandCrop.land_id == land_id).order_by(LandCrop.timestamp.asc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
     return db.execute(stmt).scalars().all()
 
 
@@ -228,6 +230,16 @@ def insert_land_soil_snapshot(
 def list_land_soil_rows(db: Session, land_id: int) -> Sequence[LandSoil]:
     stmt = select(LandSoil).where(LandSoil.land_id == land_id).order_by(LandSoil.timestamp.asc())
     return db.execute(stmt).scalars().all()
+
+
+def get_latest_soil_record(db: Session, land_id: int) -> Optional[LandSoil]:
+    stmt = (
+        select(LandSoil)
+        .where(LandSoil.land_id == land_id)
+        .order_by(LandSoil.timestamp.desc())
+        .limit(1)
+    )
+    return db.execute(stmt).scalar_one_or_none()
 
 
 # ---------------------------------------------------------------------------
