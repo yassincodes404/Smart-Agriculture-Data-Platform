@@ -186,3 +186,132 @@ def clean_water_batch(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         List of cleaned records.
     """
     return [clean_water_record(r) for r in records]
+
+
+# ---------------------------------------------------------------------------
+# Crop Data Cleaning
+# ---------------------------------------------------------------------------
+
+def clean_crop_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Apply minimal standardisation to a single crop record.
+
+    Operations:
+    - Normalise governorate name
+    - Title-case crop type
+    - Ensure numeric types for production_tons and area_feddan
+
+    Args:
+        record: Raw parsed record dict.
+
+    Returns:
+        Cleaned record dict (new copy).
+    """
+    cleaned: Dict[str, Any] = {}
+
+    raw_gov = record.get("governorate", "")
+    cleaned["governorate"] = normalise_governorate(str(raw_gov))
+
+    cleaned["crop_type"] = str(record.get("crop_type", "")).strip().title()
+
+    if "year" in record:
+        cleaned["year"] = int(record["year"])
+
+    cleaned["production_tons"] = float(record.get("production_tons", 0))
+    cleaned["area_feddan"] = float(record.get("area_feddan", 0))
+
+    if "land_id" in record:
+        cleaned["land_id"] = int(record["land_id"])
+
+    return cleaned
+
+
+def clean_crop_batch(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Clean an entire batch of crop records."""
+    return [clean_crop_record(r) for r in records]
+
+
+# ---------------------------------------------------------------------------
+# Soil Data Cleaning
+# ---------------------------------------------------------------------------
+
+def clean_soil_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Apply minimal standardisation to a single soil record.
+
+    Operations:
+    - Normalise governorate name (if present)
+    - Ensure numeric types for soil_moisture and ph
+    - Lowercase soil_type
+
+    Args:
+        record: Raw parsed record dict.
+
+    Returns:
+        Cleaned record dict (new copy).
+    """
+    cleaned: Dict[str, Any] = {}
+
+    if "governorate" in record and record["governorate"]:
+        cleaned["governorate"] = normalise_governorate(str(record["governorate"]))
+
+    cleaned["soil_moisture"] = float(record.get("soil_moisture", 0.0))
+    cleaned["soil_type"] = str(record.get("soil_type", "")).strip().lower()
+    cleaned["ph"] = float(record.get("ph", 7.0))
+
+    if "latitude" in record:
+        cleaned["latitude"] = float(record["latitude"])
+    if "longitude" in record:
+        cleaned["longitude"] = float(record["longitude"])
+    if "land_id" in record:
+        cleaned["land_id"] = int(record["land_id"])
+
+    return cleaned
+
+
+def clean_soil_batch(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Clean an entire batch of soil records."""
+    return [clean_soil_record(r) for r in records]
+
+
+# ---------------------------------------------------------------------------
+# Climate Record Cleaning (JSON / API — for land analytics pipeline)
+# ---------------------------------------------------------------------------
+
+def clean_climate_api_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Clean a climate record sourced from JSON API (land analytics pipeline).
+
+    Differs from clean_climate_record which expects CSV-style keys
+    (temperature_mean, humidity_pct).  This expects (temperature, rainfall).
+
+    Args:
+        record: Raw parsed record dict.
+
+    Returns:
+        Cleaned record dict (new copy).
+    """
+    cleaned: Dict[str, Any] = {}
+
+    if "governorate" in record and record["governorate"]:
+        cleaned["governorate"] = normalise_governorate(str(record["governorate"]))
+
+    cleaned["temperature"] = float(record.get("temperature", 0.0))
+    cleaned["rainfall"] = float(record.get("rainfall", 0.0))
+
+    if "latitude" in record:
+        cleaned["latitude"] = float(record["latitude"])
+    if "longitude" in record:
+        cleaned["longitude"] = float(record["longitude"])
+    if "year" in record:
+        cleaned["year"] = int(record["year"])
+    if "land_id" in record:
+        cleaned["land_id"] = int(record["land_id"])
+
+    return cleaned
+
+
+def clean_climate_api_batch(records: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Clean an entire batch of climate API records."""
+    return [clean_climate_api_record(r) for r in records]
+

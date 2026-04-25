@@ -12,6 +12,7 @@ from app.models.etl_error import EtlError
 from app.models.location import Location
 from app.models.climate_record import ClimateRecord
 from app.models.water_record import WaterRecord
+from app.models.land_analytics_record import LandAnalyticsRecord
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -92,3 +93,47 @@ def insert_water_record(db: Session, record_data: dict, batch_id: int, location_
         err_msg = str(e)
         log_error(db, batch_id, "DB_INSERT", err_msg, str(record_data))
         raise e
+
+
+def insert_land_analytics_record(
+    db: Session,
+    record_data: dict,
+    batch_id: int,
+    location_id: int,
+):
+    """
+    Insert a single land analytics record into the database.
+
+    Args:
+        db: SQLAlchemy session.
+        record_data: Merged analytics dict with all domain fields.
+        batch_id: Current ingestion batch ID.
+        location_id: FK to locations table.
+
+    Raises:
+        Exception: On insert failure (after rollback and error logging).
+    """
+    try:
+        record = LandAnalyticsRecord(
+            location_id=location_id,
+            land_id=record_data["land_id"],
+            temperature=record_data.get("temperature"),
+            rainfall=record_data.get("rainfall"),
+            ndvi=record_data.get("ndvi"),
+            vegetation_health=record_data.get("vegetation_health"),
+            crop_type=record_data.get("crop_type"),
+            soil_moisture=record_data.get("soil_moisture"),
+            water_need_estimate=record_data.get("water_need_estimate"),
+            risk_level=record_data.get("risk_level"),
+            batch_id=batch_id,
+            source_system="LandAnalytics_Pipeline",
+            ingestion_timestamp=_utcnow(),
+        )
+        db.add(record)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        err_msg = str(e)
+        log_error(db, batch_id, "DB_INSERT", err_msg, str(record_data))
+        raise e
+
