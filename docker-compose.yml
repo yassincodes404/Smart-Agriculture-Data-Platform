@@ -14,6 +14,12 @@ services:
       - mysql_data:/var/lib/mysql
       - ./Database/init.sql:/docker-entrypoint-initdb.d/00_init.sql
       - ./Database/geospatial_schema.sql:/docker-entrypoint-initdb.d/20_geospatial_schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "agri_user", "-pagri_pass"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   backend:
     build: ./services/backend
@@ -26,7 +32,9 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+    restart: on-failure
 
   scheduler:
     build: ./services/backend
@@ -38,7 +46,9 @@ services:
       - ./services/backend/app:/app/app
       - ./data:/data
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
+    restart: on-failure
 
   opencv:
     build: ./services/opencv
@@ -58,6 +68,8 @@ services:
       - /app/node_modules
     ports:
       - "5173:5173"
+    depends_on:
+      - backend
 
   nginx:
     build: ./infra/nginx

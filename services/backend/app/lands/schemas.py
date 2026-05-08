@@ -86,6 +86,22 @@ class LandDetailResponse(BaseModel):
     created_at: str
 
 
+class LandListItem(BaseModel):
+    """Lightweight land summary for list views."""
+    land_id: int
+    name: str
+    latitude: float
+    longitude: float
+    area_hectares: Optional[float]
+    status: str
+    created_at: str
+
+
+class LandListResponse(BaseModel):
+    lands: list[LandListItem]
+    total: int
+
+
 # ---------------------------------------------------------------------------
 # Time-series
 # ---------------------------------------------------------------------------
@@ -111,6 +127,7 @@ class LandImageItem(BaseModel):
     date: str
     image_type: str
     image_path: str
+    image_url: Optional[str] = None
     ndvi_mean: Optional[float] = None
     cloud_cover_pct: Optional[float] = None
 
@@ -118,3 +135,28 @@ class LandImageItem(BaseModel):
 class LandImageListResponse(BaseModel):
     land_id: int
     images: list[LandImageItem]
+
+
+# ---------------------------------------------------------------------------
+# Crop Zones
+# ---------------------------------------------------------------------------
+
+class CropZoneItem(BaseModel):
+    """A crop zone within a land — a sub-area with a distinct crop type."""
+    zone_id: int
+    crop_type: str
+    area_hectares: Optional[float] = None
+    area_pct: Optional[float] = None
+    status: str = "active"
+    avg_confidence: Optional[float] = None
+    latest_ndvi: Optional[float] = None
+    latest_growth_stage: Optional[str] = None
+    estimated_yield_tons: Optional[float] = None
+    first_detected: Optional[str] = None
+    last_updated: Optional[str] = None
+
+
+class CropZoneListResponse(BaseModel):
+    land_id: int
+    total_zones: int
+    zones: list[CropZoneItem]

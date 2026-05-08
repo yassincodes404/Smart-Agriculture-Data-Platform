@@ -1,0 +1,395 @@
+/* ================================================================
+   Lands.css — Lands Explorer & Land Details page styles
+   Source of truth: documents/Frontend/07_UI_UX_Style_Guide.md
+   ================================================================ */
+
+/* --- Toolbar --- */
+.lands-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.lands-toolbar__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.lands-toolbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* Filter Pills */
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+  border: 1.5px solid var(--border-color);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.filter-pill:hover {
+  border-color: var(--gray-300);
+  color: var(--text-primary);
+}
+
+.filter-pill--active {
+  border-color: var(--green-500);
+  background: var(--green-50);
+  color: var(--green-700);
+  font-weight: 600;
+}
+
+.filter-pill__count {
+  background: var(--gray-100);
+  color: var(--gray-600);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  line-height: 1;
+}
+
+.filter-pill--active .filter-pill__count {
+  background: var(--green-200);
+  color: var(--green-800);
+}
+
+
+/* --- Lands Grid --- */
+.lands-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-lg);
+}
+
+
+/* --- Land Detail Sections --- */
+.land-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+}
+
+.land-detail__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.land-detail__header-info {
+  flex: 1;
+}
+
+.land-detail__title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.75px;
+  margin-bottom: var(--space-xs);
+}
+
+.land-detail__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: 14px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.land-detail__meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.land-detail__meta-item svg {
+  width: 16px;
+  height: 16px;
+  color: var(--gray-400);
+}
+
+.land-detail__header-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* Satellite Viewer Placeholder */
+.satellite-viewer {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.satellite-viewer__controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.satellite-viewer__tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--gray-100);
+  border-radius: var(--radius-md);
+  padding: 3px;
+}
+
+.satellite-viewer__tab {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border: none;
+  background: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.satellite-viewer__tab:hover {
+  color: var(--text-primary);
+}
+
+.satellite-viewer__tab--active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}
+
+.satellite-viewer__map {
+  height: 400px;
+  background:
+    linear-gradient(135deg, #1a3a2a 0%, #0d2818 30%, #142e1e 60%, #0a1f12 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.satellite-viewer__map-overlay {
+  text-align: center;
+  z-index: 2;
+}
+
+.satellite-viewer__map-overlay svg {
+  width: 48px;
+  height: 48px;
+  color: var(--green-400);
+  margin-bottom: var(--space-sm);
+  opacity: 0.7;
+}
+
+.satellite-viewer__map-overlay p {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+}
+
+/* Decorative grid for map placeholder */
+.satellite-viewer__map-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+
+/* Key Metrics Row */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-md);
+}
+
+.metric-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  text-align: center;
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.metric-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.metric-card__value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 2px;
+}
+
+.metric-card__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metric-card__sub {
+  font-size: 12px;
+  color: var(--gray-400);
+  margin-top: var(--space-xs);
+}
+
+
+/* Insights Cards */
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--space-lg);
+}
+
+.insight-card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition-base), transform var(--transition-base);
+}
+
+.insight-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-2px);
+}
+
+.insight-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.insight-card__icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.insight-card__icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.insight-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.insight-card__body {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+
+/* --- Add Land Form --- */
+.add-land-form {
+  max-width: 640px;
+}
+
+.add-land-form .input-group {
+  margin-bottom: var(--space-md);
+}
+
+.add-land-map {
+  height: 360px;
+  border: 1.5px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+  background: var(--gray-50);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-lg);
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.add-land-map:hover {
+  border-color: var(--green-400);
+  background: var(--green-50);
+}
+
+.add-land-map__placeholder {
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.add-land-map__placeholder svg {
+  width: 48px;
+  height: 48px;
+  color: var(--gray-300);
+  margin-bottom: var(--space-sm);
+}
+
+.add-land-map__placeholder p {
+  font-size: 14px;
+}
+
+
+/* --- Responsive --- */
+@media (max-width: 1024px) {
+  .lands-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+
+  .satellite-viewer__map {
+    height: 300px;
+  }
+
+  .land-detail__header {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 640px) {
+  .lands-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .lands-toolbar__left {
+    overflow-x: auto;
+    padding-bottom: var(--space-sm);
+  }
+
+  .lands-grid {
+    grid-template-columns: 1fr;
+  }
+}

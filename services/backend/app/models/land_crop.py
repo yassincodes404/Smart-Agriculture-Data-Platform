@@ -23,4 +23,5 @@ class LandCrop(Base):
     growth_stage = Column(String(50), nullable=True)       # planting/vegetative/flowering/maturity/harvest
     ndvi_trend = Column(String(20), nullable=True)         # improving/stable/declining
     confidence = Column(Numeric(5, 4), nullable=True)      # ML confidence score 0-1
+    zone_id = Column(Integer, ForeignKey("crop_zones.zone_id"), nullable=True, index=True)
     source_id = Column(Integer, ForeignKey("data_sources.source_id"), nullable=True)

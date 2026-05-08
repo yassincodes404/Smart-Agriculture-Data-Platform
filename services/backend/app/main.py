@@ -14,6 +14,7 @@ following the same pattern as auth_router and users_router.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 # Import base so all models are registered with SQLAlchemy metadata
 from app.db import base as _models_discovery  # noqa: F401
@@ -92,4 +93,18 @@ app.include_router(pipeline_router, prefix="/api/v1")
 app.include_router(lands_router, prefix="/api/v1")
 app.include_router(crops_router, prefix="/api/v1")
 app.include_router(soil_router, prefix="/api/v1")
+
+# ---------------------------------------------------------------------------
+# Static file serving — satellite images, processed PNGs
+# ---------------------------------------------------------------------------
+
+import os
+
+_images_dir = os.environ.get("IMAGES_DIR", "/data/images")
+if os.path.isdir(_images_dir):
+    app.mount(
+        "/api/v1/static/images",
+        StaticFiles(directory=_images_dir),
+        name="satellite-images",
+    )
 

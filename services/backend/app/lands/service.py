@@ -28,9 +28,29 @@ from app.lands.schemas import (
     LandDetailResponse,
     LandImageItem,
     LandImageListResponse,
+    LandListItem,
+    LandListResponse,
     LandTimeSeriesResponse,
     TimeSeriesPoint,
 )
+
+
+def list_all_lands(db: Session, user_id: Optional[int] = None) -> LandListResponse:
+    """Return all lands as lightweight list items."""
+    rows = repository.list_all_lands(db, user_id=user_id)
+    items = [
+        LandListItem(
+            land_id=int(r.land_id),
+            name=r.name,
+            latitude=float(r.latitude),
+            longitude=float(r.longitude),
+            area_hectares=float(r.area_hectares) if r.area_hectares is not None else None,
+            status=r.status,
+            created_at=r.created_at.isoformat(),
+        )
+        for r in rows
+    ]
+    return LandListResponse(lands=items, total=len(items))
 
 
 def register_land_for_discovery(
@@ -196,15 +216,64 @@ def list_images(
     if repository.get_land(db, land_id) is None:
         return None
     rows = repository.list_land_images(db, land_id, image_type=image_type)
-    items = [
-        LandImageItem(
-            id=int(r.id),
-            date=r.timestamp.strftime("%Y-%m-%d"),
-            image_type=r.image_type,
-            image_path=r.image_path,
-            ndvi_mean=float(r.ndvi_mean) if r.ndvi_mean is not None else None,
-            cloud_cover_pct=float(r.cloud_cover_pct) if r.cloud_cover_pct is not None else None,
+    items = []
+    for r in rows:
+        # Build image_url: remote URLs pass through, local paths get mapped
+        raw_path = r.image_path or ""
+        if raw_path.startswith("http://") or raw_path.startswith("https://"):
+            image_url = raw_path  # Remote URL — pass through
+        elif raw_path:
+            filename = raw_path.rsplit("/", 1)[-1]
+            image_url = f"/api/v1/static/images/{filename}"
+        else:
+            image_url = None
+
+        items.append(
+            LandImageItem(
+                id=int(r.id),
+                date=r.timestamp.strftime("%Y-%m-%d"),
+                image_type=r.image_type,
+                image_path=r.image_path,
+                image_url=image_url,
+                ndvi_mean=float(r.ndvi_mean) if r.ndvi_mean is not None else None,
+                cloud_cover_pct=float(r.cloud_cover_pct) if r.cloud_cover_pct is not None else None,
+            )
         )
-        for r in rows
-    ]
     return LandImageListResponse(land_id=land_id, images=items)
+
+
+# ---------------------------------------------------------------------------
+# Crop Zones
+# ---------------------------------------------------------------------------
+
+from app.lands.schemas import CropZoneItem, CropZoneListResponse
+
+
+def list_crop_zones(db: Session, land_id: int) -> Optional[CropZoneListResponse]:
+    """Return all crop zones for a land with their latest stats."""
+    land = repository.get_land(db, land_id)
+    if land is None:
+        return None
+
+    zones = repository.list_crop_zones(db, land_id)
+    items = [
+        CropZoneItem(
+            zone_id=int(z.zone_id),
+            crop_type=z.crop_type,
+            area_hectares=float(z.area_hectares) if z.area_hectares else None,
+            area_pct=float(z.area_pct) if z.area_pct else None,
+            status=z.status,
+            avg_confidence=float(z.avg_confidence) if z.avg_confidence else None,
+            latest_ndvi=float(z.latest_ndvi) if z.latest_ndvi else None,
+            latest_growth_stage=z.latest_growth_stage,
+            estimated_yield_tons=float(z.estimated_yield_tons) if z.estimated_yield_tons else None,
+            first_detected=z.first_detected.isoformat() if z.first_detected else None,
+            last_updated=z.last_updated.isoformat() if z.last_updated else None,
+        )
+        for z in zones
+    ]
+    return CropZoneListResponse(
+        land_id=land_id,
+        total_zones=len(items),
+        zones=items,
+    )

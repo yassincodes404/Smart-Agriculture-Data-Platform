@@ -50,6 +50,18 @@ def get_land(db: Session, land_id: int) -> Optional[Land]:
     return db.get(Land, land_id)
 
 
+def list_all_lands(
+    db: Session,
+    *,
+    user_id: Optional[int] = None,
+) -> Sequence[Land]:
+    """Return all lands, optionally filtered by owner."""
+    stmt = select(Land).order_by(Land.created_at.desc())
+    if user_id is not None:
+        stmt = stmt.where(Land.user_id == user_id)
+    return db.execute(stmt).scalars().all()
+
+
 def update_land_status(db: Session, land_id: int, status: str) -> None:
     land = db.get(Land, land_id)
     if land is None:
@@ -256,6 +268,7 @@ def insert_land_image(
     ndvi_mean: Optional[float] = None,
     cloud_cover_pct: Optional[float] = None,
     source_id: Optional[int] = None,
+    timestamp=None,
 ) -> LandImage:
     row = LandImage(
         land_id=land_id,
@@ -266,6 +279,8 @@ def insert_land_image(
         cloud_cover_pct=Decimal(str(cloud_cover_pct)) if cloud_cover_pct is not None else None,
         source_id=source_id,
     )
+    if timestamp is not None:
+        row.timestamp = timestamp
     db.add(row)
     db.flush()
     return row
@@ -326,3 +341,73 @@ def list_land_alerts(
     stmt = stmt.order_by(LandAlert.timestamp.desc())
     return db.execute(stmt).scalars().all()
 
+
+# ---------------------------------------------------------------------------
+# Crop Zones
+# ---------------------------------------------------------------------------
+
+from app.models.crop_zone import CropZone
+
+
+def list_crop_zones(db: Session, land_id: int) -> Sequence[CropZone]:
+    stmt = (
+        select(CropZone)
+        .where(CropZone.land_id == land_id)
+        .order_by(CropZone.area_pct.desc())
+    )
+    return db.execute(stmt).scalars().all()
+
+
+def get_or_create_crop_zone(
+    db: Session,
+    land_id: int,
+    crop_type: str,
+    area_hectares: Optional[float] = None,
+    area_pct: Optional[float] = None,
+) -> CropZone:
+    """Find existing zone by land+crop_type, or create a new one."""
+    stmt = (
+        select(CropZone)
+        .where(CropZone.land_id == land_id)
+        .where(CropZone.crop_type == crop_type)
+    )
+    zone = db.execute(stmt).scalars().first()
+    if zone:
+        if area_hectares is not None:
+            zone.area_hectares = Decimal(str(area_hectares))
+        if area_pct is not None:
+            zone.area_pct = Decimal(str(area_pct))
+        return zone
+
+    zone = CropZone(
+        land_id=land_id,
+        crop_type=crop_type,
+        area_hectares=Decimal(str(area_hectares)) if area_hectares is not None else None,
+        area_pct=Decimal(str(area_pct)) if area_pct is not None else None,
+    )
+    db.add(zone)
+    db.flush()
+    return zone
+
+
+def update_crop_zone_stats(
+    db: Session,
+    zone_id: int,
+    *,
+    latest_ndvi: Optional[float] = None,
+    latest_growth_stage: Optional[str] = None,
+    avg_confidence: Optional[float] = None,
+    estimated_yield_tons: Optional[float] = None,
+) -> None:
+    zone = db.get(CropZone, zone_id)
+    if zone is None:
+        return
+    if latest_ndvi is not None:
+        zone.latest_ndvi = Decimal(str(latest_ndvi))
+    if latest_growth_stage is not None:
+        zone.latest_growth_stage = latest_growth_stage
+    if avg_confidence is not None:
+        zone.avg_confidence = Decimal(str(avg_confidence))
+    if estimated_yield_tons is not None:
+        zone.estimated_yield_tons = Decimal(str(estimated_yield_tons))
+    db.flush()
