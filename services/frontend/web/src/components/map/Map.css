@@ -1,0 +1,446 @@
+/* ================================================================
+   Map.css — Leaflet map components & drawing UI styles
+   Source of truth: documents/Frontend/07_UI_UX_Style_Guide.md
+   ================================================================ */
+
+/* --- Map Wrapper --- */
+.map-draw-wrapper {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1.5px solid var(--border-color);
+  background: var(--gray-100);
+  transition: border-color var(--transition-fast);
+}
+
+.map-draw-wrapper:hover {
+  border-color: var(--green-400);
+}
+
+/* --- Fullscreen Mode --- */
+.map-draw-wrapper--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  border-radius: 0;
+  border: none;
+}
+
+.map-draw-wrapper--fullscreen .map-container {
+  height: 100vh !important;
+}
+
+/* --- Map Container --- */
+.map-container {
+  width: 100%;
+  height: 460px;
+  z-index: 1;
+}
+
+/* Fix Leaflet z-indexes so they don't overlay sidebar/modals */
+.map-draw-wrapper .leaflet-pane {
+  z-index: 1;
+}
+
+.map-draw-wrapper .leaflet-top,
+.map-draw-wrapper .leaflet-bottom {
+  z-index: 2;
+}
+
+/* --- Leaflet Overrides (Design System Integration) --- */
+
+/* Controls background */
+.map-draw-wrapper .leaflet-bar {
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+  overflow: hidden;
+}
+
+.map-draw-wrapper .leaflet-bar a {
+  color: var(--text-primary) !important;
+  border-bottom: 1px solid var(--gray-100) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.map-draw-wrapper .leaflet-bar a:hover {
+  background: var(--green-50) !important;
+  color: var(--green-700) !important;
+}
+
+/* Draw toolbar buttons */
+.map-draw-wrapper .leaflet-draw-toolbar a {
+  border-radius: 0 !important;
+}
+
+.map-draw-wrapper .leaflet-draw-toolbar a:first-child {
+  border-radius: var(--radius-md) var(--radius-md) 0 0 !important;
+}
+
+.map-draw-wrapper .leaflet-draw-toolbar a:last-child {
+  border-radius: 0 0 var(--radius-md) var(--radius-md) !important;
+  border-bottom: none !important;
+}
+
+/* Draw tooltip styling */
+.leaflet-draw-tooltip {
+  background: var(--gray-900) !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+  padding: var(--space-xs) var(--space-sm) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 12px !important;
+  box-shadow: var(--shadow-lg) !important;
+  color: #fff !important;
+}
+
+.leaflet-draw-tooltip:before {
+  border-right-color: var(--gray-900) !important;
+}
+
+.leaflet-draw-tooltip-single {
+  margin-top: -12px !important;
+}
+
+/* Attribution */
+.map-draw-wrapper .leaflet-control-attribution {
+  font-family: var(--font-sans) !important;
+  font-size: 10px !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  padding: 2px 6px !important;
+}
+
+/* Polygon draw styling */
+.leaflet-draw-guide-dash {
+  background: var(--green-500) !important;
+}
+
+.leaflet-interactive {
+  outline: none !important;
+}
+
+
+/* --- Top Controls (layer switcher + fullscreen) --- */
+.map-top-controls {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* --- Map Toolbar (layer switcher) --- */
+.map-toolbar {
+  display: flex;
+  gap: 2px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  box-shadow: var(--shadow-md);
+}
+
+.map-toolbar__btn {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.map-toolbar__btn:hover {
+  color: var(--text-primary);
+  background: var(--gray-100);
+}
+
+.map-toolbar__btn--active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+}
+
+/* --- Fullscreen button --- */
+.map-fullscreen-btn {
+  background: rgba(255, 255, 255, 0.96) !important;
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-md) !important;
+  padding: var(--space-xs) !important;
+  box-shadow: var(--shadow-md) !important;
+  width: 32px;
+  height: 32px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-fullscreen-btn:hover {
+  background: var(--green-50) !important;
+  border-color: var(--green-400) !important;
+}
+
+
+/* --- Instructions Overlay (before drawing) --- */
+.map-instructions {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  text-align: center;
+  pointer-events: none;
+  animation: fadeIn 400ms ease;
+}
+
+.map-instructions__icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto var(--space-sm);
+  color: var(--green-500);
+  opacity: 0.7;
+}
+
+.map-instructions__text {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--gray-700);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.map-instructions__sub {
+  font-size: 12px;
+  color: var(--gray-400);
+  margin-top: var(--space-xs);
+}
+
+
+/* --- Map Info Panel (appears when polygon is drawn) --- */
+.map-info-panel {
+  position: absolute;
+  bottom: var(--space-md);
+  left: var(--space-md);
+  right: var(--space-md);
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  box-shadow: var(--shadow-lg);
+  animation: slideUp 300ms ease;
+}
+
+.map-info-panel__stats {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.map-info-panel__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.map-info-panel__stat-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.map-info-panel__stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.map-info-panel__actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+
+/* ================================================================
+   MapViewComponent — Read-only land boundary map
+   ================================================================ */
+
+/* --- View Wrapper --- */
+.map-view-wrapper {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: var(--gray-100);
+  box-shadow: var(--shadow-sm);
+}
+
+.map-view-wrapper--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  border-radius: 0;
+  border: none;
+}
+
+.map-view-wrapper--fullscreen .map-container--view {
+  height: 100vh !important;
+}
+
+/* View-specific container height */
+.map-container--view {
+  height: 400px;
+}
+
+/* Leaflet overrides scoped to view wrapper */
+.map-view-wrapper .leaflet-pane {
+  z-index: 1;
+}
+
+.map-view-wrapper .leaflet-top,
+.map-view-wrapper .leaflet-bottom {
+  z-index: 2;
+}
+
+.map-view-wrapper .leaflet-bar {
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-md) !important;
+  overflow: hidden;
+}
+
+.map-view-wrapper .leaflet-bar a {
+  color: var(--text-primary) !important;
+  border-bottom: 1px solid var(--gray-100) !important;
+}
+
+.map-view-wrapper .leaflet-bar a:hover {
+  background: var(--green-50) !important;
+  color: var(--green-700) !important;
+}
+
+.map-view-wrapper .leaflet-control-attribution {
+  font-family: var(--font-sans) !important;
+  font-size: 10px !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Popup styling */
+.map-popup .leaflet-popup-content-wrapper {
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-lg) !important;
+  border: 1px solid var(--border-color);
+}
+
+.map-popup .leaflet-popup-tip {
+  border-top-color: var(--border-color);
+}
+
+
+/* --- Bottom Info Bar --- */
+.map-view-info {
+  position: absolute;
+  bottom: var(--space-sm);
+  left: var(--space-sm);
+  right: var(--space-sm);
+  z-index: 1000;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-xs) var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+  box-shadow: var(--shadow-md);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.map-view-info__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-view-info__item svg {
+  color: var(--gray-400);
+}
+
+.map-view-info__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--green-600);
+}
+
+
+/* ================================================================
+   Responsive
+   ================================================================ */
+
+@media (max-width: 1024px) {
+  .map-container {
+    height: 350px;
+  }
+
+  .map-container--view {
+    height: 320px;
+  }
+}
+
+@media (max-width: 640px) {
+  .map-container {
+    height: 280px;
+  }
+
+  .map-container--view {
+    height: 250px;
+  }
+
+  .map-info-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .map-info-panel__stats {
+    flex-wrap: wrap;
+    gap: var(--space-md);
+  }
+
+  .map-top-controls {
+    flex-wrap: wrap;
+  }
+
+  .map-view-info {
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+}

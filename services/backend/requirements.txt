@@ -2,12 +2,18 @@ fastapi
 uvicorn[standard]
 
 pydantic
+pydantic-settings
+email-validator
 python-dotenv
 
 sqlalchemy
 alembic
 pymysql
 cryptography
+
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
 
 pandas
 numpy
@@ -20,8 +26,7 @@ scikit-learn
 
 httpx
 requests
-
-python-multipart
+apscheduler
 
 pytest
 pytest-asyncio

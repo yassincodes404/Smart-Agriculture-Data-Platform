@@ -1,8 +1,110 @@
-from fastapi import FastAPI
-from app.api.health import router as health_router
-from fastapi import FastAPI
-from app.api.health import router as health_router
+"""
+main.py
+-------
+FastAPI application entry point for the Smart Agriculture Data Platform backend.
 
-app = FastAPI()
+Startup behaviour:
+- Creates all database tables if they don't exist (SQLAlchemy create_all).
+- Registers all API routers under /api/v1.
+- Configures CORS for React frontend.
 
+All future routers (crops, water, climate …) should be imported and registered here
+following the same pattern as auth_router and users_router.
+"""
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+# Import base so all models are registered with SQLAlchemy metadata
+from app.db import base as _models_discovery  # noqa: F401
+
+# Routers
+from app.api.health import router as health_router
+from app.api.auth import router as auth_router
+from app.api.users import router as users_router
+from app.api.climate import router as climate_router
+from app.api.ingestion import router as ingestion_router
+from app.api.pipeline import router as pipeline_router
+from app.api.lands import router as lands_router
+from app.api.crops import router as crops_router
+from app.api.soil import router as soil_router
+
+# ---------------------------------------------------------------------------
+# App initialisation
+# ---------------------------------------------------------------------------
+
+app = FastAPI(
+    title="Smart Agriculture Data Platform API",
+    description="RESTful backend for agricultural data analytics, AI recommendations, and CV processing.",
+    version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json",
+)
+
+# ---------------------------------------------------------------------------
+# CORS — allow React frontend (adjust origins for production)
+# ---------------------------------------------------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],           # restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------------------------------------------------
+# Database table auto-creation (development convenience)
+# For production: use Alembic migrations instead.
+# ---------------------------------------------------------------------------
+
+@app.on_event("startup")
+def create_tables() -> None:
+    """
+    Create all SQLAlchemy-registered tables on startup if they don't exist.
+
+    Silently skips if the database is unreachable (e.g. running tests locally
+    without Docker). Tests use their own in-memory SQLite via dependency override.
+    """
+    try:
+        from app.models.user import Base
+        from app.db.session import get_engine
+        Base.metadata.create_all(bind=get_engine())
+    except Exception:
+        # DB not available (e.g. local test run without Docker) — safe to ignore.
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Router registration
+# ---------------------------------------------------------------------------
+
+# Existing health routes (no version prefix — keeps /api/health working)
 app.include_router(health_router)
+
+# Versioned auth & user management routes
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(users_router, prefix="/api/v1")
+app.include_router(climate_router, prefix="/api/v1")
+app.include_router(ingestion_router, prefix="/api/v1")
+app.include_router(pipeline_router, prefix="/api/v1")
+app.include_router(lands_router, prefix="/api/v1")
+app.include_router(crops_router, prefix="/api/v1")
+app.include_router(soil_router, prefix="/api/v1")
+
+# ---------------------------------------------------------------------------
+# Static file serving — satellite images, processed PNGs
+# ---------------------------------------------------------------------------
+
+import os
+
+_images_dir = os.environ.get("IMAGES_DIR", "/data/images")
+if os.path.isdir(_images_dir):
+    app.mount(
+        "/api/v1/static/images",
+        StaticFiles(directory=_images_dir),
+        name="satellite-images",
+    )
+

@@ -62,3 +62,7 @@ _archive_backup_*
 data/
 !data/.gitkeep
 !Database/.gitkeep
+
+# Pytest / local SQLite artifacts
+test.db
+services/backend/test.db
