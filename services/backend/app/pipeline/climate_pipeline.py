@@ -78,11 +78,11 @@ def run_climate_ingestion(
         logger.info(f"[Climate Pipeline] Loaded raw CSV ({len(raw_content)} bytes)")
 
         # --- Step 3: Parse CSV into records ---
-        parsed_records = load_climate_records(filename)
-        logger.info(f"[Climate Pipeline] Parsed {len(parsed_records)} records")
+        valid_parsed, invalid_parsed = parse_climate_csv(raw_content)
+        logger.info(f"[Climate Pipeline] Parsed {len(valid_parsed)} valid, {len(invalid_parsed)} invalid records")
 
         # --- Step 4: Clean records ---
-        cleaned_records = clean_climate_batch(parsed_records)
+        cleaned_records = clean_climate_batch(valid_parsed)
         logger.info(f"[Climate Pipeline] Cleaned {len(cleaned_records)} records")
 
         # --- Step 5: Validate records ---
@@ -92,8 +92,12 @@ def run_climate_ingestion(
             f"{len(valid_records)} valid, {len(invalid_records)} invalid"
         )
 
-        # --- Step 6: Log validation errors ---
+        # --- Step 6: Log validation & parse errors ---
         error_count = 0
+        for inv in invalid_parsed:
+            log_error(db, batch_id, "CSV_PARSE", inv["error"], inv["record"])
+            error_count += 1
+
         for inv in invalid_records:
             for err_msg in inv["errors"]:
                 log_error(db, batch_id, "VALIDATION", err_msg, str(inv["record"]))
@@ -137,10 +141,10 @@ def run_climate_ingestion(
         result = {
             "batch_id": batch_id,
             "source_file": filename,
-            "total_parsed": len(parsed_records),
+            "total_parsed": len(valid_parsed) + len(invalid_parsed),
             "total_cleaned": len(cleaned_records),
             "total_valid": len(valid_records),
-            "total_invalid": len(invalid_records),
+            "total_invalid": len(invalid_records) + len(invalid_parsed),
             "inserted_count": inserted_count,
             "skipped_duplicates": skipped_duplicates,
             "error_count": error_count,

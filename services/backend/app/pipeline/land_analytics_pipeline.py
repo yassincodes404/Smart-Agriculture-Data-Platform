@@ -39,11 +39,13 @@ from app.pipeline.data_cleaning import (
     clean_climate_api_batch,
     clean_crop_batch,
     clean_soil_batch,
+    clean_water_batch,
 )
 from app.pipeline.data_validation import (
     validate_climate_api_batch,
     validate_crop_batch,
     validate_soil_batch,
+    validate_water_batch,
     validate_land_analytics_batch,
 )
 from app.pipeline.feature_engineering import (
@@ -175,8 +177,18 @@ def run_land_analytics_pipeline(
                 f"[Land Analytics Pipeline] Crop: {len(valid_crop)} valid"
             )
 
-        # Water data (passed through as-is; already structured)
-        valid_water: List[Dict[str, Any]] = water_data or []
+        # Water data (clean and validate)
+        valid_water: List[Dict[str, Any]] = []
+        if water_data:
+            cleaned_water = clean_water_batch(water_data)
+            valid_water, invalid_water = validate_water_batch(cleaned_water)
+            for inv in invalid_water:
+                for err_msg in inv["errors"]:
+                    log_error(db, batch_id, "WATER_VALIDATION", err_msg, str(inv["record"]))
+                    error_count += 1
+            logger.info(
+                f"[Land Analytics Pipeline] Water: {len(valid_water)} valid"
+            )
 
         # CV/AI outputs (passed through as-is; already processed)
         ai_outputs: List[Dict[str, Any]] = cv_ai_outputs or []

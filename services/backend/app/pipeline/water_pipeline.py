@@ -43,10 +43,10 @@ def run_water_ingestion(
         raw_content = load_water_csv(filename)
         logger.info(f"[Water Pipeline] Loaded raw CSV ({len(raw_content)} bytes)")
 
-        parsed_records = load_water_records(filename)
-        logger.info(f"[Water Pipeline] Parsed {len(parsed_records)} records")
+        valid_parsed, invalid_parsed = parse_water_csv(raw_content)
+        logger.info(f"[Water Pipeline] Parsed {len(valid_parsed)} valid, {len(invalid_parsed)} invalid records")
 
-        cleaned_records = clean_water_batch(parsed_records)
+        cleaned_records = clean_water_batch(valid_parsed)
         logger.info(f"[Water Pipeline] Cleaned {len(cleaned_records)} records")
 
         valid_records, invalid_records = validate_water_batch(cleaned_records)
@@ -56,6 +56,10 @@ def run_water_ingestion(
         )
 
         error_count = 0
+        for inv in invalid_parsed:
+            log_error(db, batch_id, "CSV_PARSE", inv["error"], inv["record"])
+            error_count += 1
+
         for inv in invalid_records:
             for err_msg in inv["errors"]:
                 log_error(db, batch_id, "VALIDATION", err_msg, str(inv["record"]))
@@ -97,10 +101,10 @@ def run_water_ingestion(
         result = {
             "batch_id": batch_id,
             "source_file": filename,
-            "total_parsed": len(parsed_records),
+            "total_parsed": len(valid_parsed) + len(invalid_parsed),
             "total_cleaned": len(cleaned_records),
             "total_valid": len(valid_records),
-            "total_invalid": len(invalid_records),
+            "total_invalid": len(invalid_records) + len(invalid_parsed),
             "inserted_count": inserted_count,
             "skipped_duplicates": skipped_duplicates,
             "error_count": error_count,
