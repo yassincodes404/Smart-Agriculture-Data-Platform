@@ -68,7 +68,7 @@ class GroqClient:
                         break
         
         if has_vision and model == GROQ_MODEL:
-            model = "llama-3.2-90b-vision-preview"
+            model = "llama-3.2-11b-vision-preview"
 
         keys = self._get_active_keys()
         if not keys:
@@ -179,7 +179,7 @@ class GroqClient:
                 self.db.flush()
                 return None
 
-            if resp.status_code in (401, 403, 400):
+            if resp.status_code in (401, 403):
                 # Invalid / wrong key — deactivate it so user knows to fix it
                 logger.warning(
                     "Groq key_id=%s returned %s (invalid key) — deactivating: %s",
@@ -189,6 +189,15 @@ class GroqClient:
                 key_row.label = (key_row.label or "") + " [INVALID KEY]"
                 self.db.add(key_row)
                 self.db.flush()
+                return None
+                
+            if resp.status_code == 400:
+                # Application error (e.g. bad payload, model unavailable, context too large)
+                # DO NOT deactivate the key for this.
+                logger.error(
+                    "Groq key_id=%s returned 400 Bad Request: %s",
+                    key_row.key_id, resp.text[:500],
+                )
                 return None
 
         except httpx.TimeoutException:
