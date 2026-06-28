@@ -1,5 +1,6 @@
 """Persistence helpers for `lands` and related geospatial tables."""
 
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional, Sequence
 
@@ -128,8 +129,14 @@ def insert_land_crop_snapshot(
     db: Session,
     land_id: int,
     *,
+    timestamp: Optional[datetime] = None,
     crop_type: Optional[str] = None,
     ndvi_value: Optional[float] = None,
+    dvi_value: Optional[float] = None,
+    evi_value: Optional[float] = None,
+    ndwi_value: Optional[float] = None,
+    savi_value: Optional[float] = None,
+    gndvi_value: Optional[float] = None,
     estimated_yield_tons: Optional[float] = None,
     growth_stage: Optional[str] = None,
     ndvi_trend: Optional[str] = None,
@@ -140,12 +147,19 @@ def insert_land_crop_snapshot(
         land_id=land_id,
         crop_type=crop_type,
         ndvi_value=Decimal(str(ndvi_value)) if ndvi_value is not None else None,
+        dvi_value=Decimal(str(dvi_value)) if dvi_value is not None else None,
+        evi_value=Decimal(str(evi_value)) if evi_value is not None else None,
+        ndwi_value=Decimal(str(ndwi_value)) if ndwi_value is not None else None,
+        savi_value=Decimal(str(savi_value)) if savi_value is not None else None,
+        gndvi_value=Decimal(str(gndvi_value)) if gndvi_value is not None else None,
         estimated_yield_tons=Decimal(str(estimated_yield_tons)) if estimated_yield_tons is not None else None,
         growth_stage=growth_stage,
         ndvi_trend=ndvi_trend,
         confidence=Decimal(str(confidence)) if confidence is not None else None,
         source_id=source_id,
     )
+    if timestamp is not None:
+        row.timestamp = timestamp
     db.add(row)
     db.flush()
     return row
@@ -262,7 +276,7 @@ def insert_land_image(
     db: Session,
     land_id: int,
     *,
-    image_path: str,
+    image_data: bytes,
     image_type: str,
     cv_analysis_summary: Optional[dict] = None,
     ndvi_mean: Optional[float] = None,
@@ -272,7 +286,7 @@ def insert_land_image(
 ) -> LandImage:
     row = LandImage(
         land_id=land_id,
-        image_path=image_path,
+        image_data=image_data,
         image_type=image_type,
         cv_analysis_summary=cv_analysis_summary,
         ndvi_mean=Decimal(str(ndvi_mean)) if ndvi_mean is not None else None,

@@ -19,6 +19,11 @@ class LandCrop(Base):
     timestamp = Column(DateTime, default=_utcnow, nullable=False)
     crop_type = Column(String(100), nullable=True)
     ndvi_value = Column(Numeric(10, 4), nullable=True)
+    dvi_value = Column(Numeric(10, 4), nullable=True)
+    evi_value = Column(Numeric(10, 4), nullable=True)
+    ndwi_value = Column(Numeric(10, 4), nullable=True)
+    savi_value = Column(Numeric(10, 4), nullable=True)
+    gndvi_value = Column(Numeric(10, 4), nullable=True)
     estimated_yield_tons = Column(Numeric(14, 4), nullable=True)
     growth_stage = Column(String(50), nullable=True)       # planting/vegetative/flowering/maturity/harvest
     ndvi_trend = Column(String(20), nullable=True)         # improving/stable/declining

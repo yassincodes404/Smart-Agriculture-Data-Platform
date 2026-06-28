@@ -195,13 +195,13 @@ def fetch_historical_climate(
     start_str = start_date.isoformat()
     end_str = end_date.isoformat()
 
-    # ---- Daily call: temperatures, rainfall, ET₀ ----
+    # ---- Daily call: temperatures, humidity, rainfall, ET₀ ----
     params_daily = {
         "latitude": latitude,
         "longitude": longitude,
         "start_date": start_str,
         "end_date": end_str,
-        "daily": "temperature_2m_max,temperature_2m_min,precipitation_sum,et0_fao_evapotranspiration",
+        "daily": "temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,precipitation_sum,et0_fao_evapotranspiration",
         "timezone": "UTC",
     }
     try:
@@ -217,6 +217,7 @@ def fetch_historical_climate(
     dates = daily.get("time") or []
     t_max = daily.get("temperature_2m_max") or []
     t_min = daily.get("temperature_2m_min") or []
+    h_mean = daily.get("relative_humidity_2m_mean") or []
     rain = daily.get("precipitation_sum") or []
     et0 = daily.get("et0_fao_evapotranspiration") or []
 
@@ -227,6 +228,8 @@ def fetch_historical_climate(
             rec["temperature_max_c"] = float(t_max[i])
         if i < len(t_min) and t_min[i] is not None:
             rec["temperature_min_c"] = float(t_min[i])
+        if i < len(h_mean) and h_mean[i] is not None:
+            rec["humidity_pct"] = float(h_mean[i])
         if i < len(rain) and rain[i] is not None:
             rec["rainfall_mm"] = float(rain[i])
         if i < len(et0) and et0[i] is not None:

@@ -25,3 +25,6 @@ from app.models.analytics_summary import AnalyticsSummary  # noqa: F401
 from app.models.land_alert import LandAlert  # noqa: F401
 from app.models.land_soil_profile import LandSoilProfile  # noqa: F401
 from app.models.crop_zone import CropZone  # noqa: F401
+from app.models.ai_settings import AiApiKey  # noqa: F401
+from app.models.ai_chat import AiChatSession, AiChatMessage  # noqa: F401
+from app.models.land_ai_insight import LandAiInsight  # noqa: F401

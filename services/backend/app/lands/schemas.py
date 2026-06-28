@@ -126,7 +126,6 @@ class LandImageItem(BaseModel):
     id: int
     date: str
     image_type: str
-    image_path: str
     image_url: Optional[str] = None
     ndvi_mean: Optional[float] = None
     cloud_cover_pct: Optional[float] = None
