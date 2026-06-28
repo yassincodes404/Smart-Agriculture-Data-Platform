@@ -137,3 +137,74 @@ def insert_land_analytics_record(
         log_error(db, batch_id, "DB_INSERT", err_msg, str(record_data))
         raise e
 
+
+def insert_crop_record(
+    db: Session,
+    record_data: dict,
+    batch_id: int,
+    location_id: int,
+    source_system: str = "CSV_File_Pipeline",
+) -> None:
+    """Insert a single crop production record."""
+    from app.models.crop_production_record import CropProductionRecord
+    try:
+        record = CropProductionRecord(
+            location_id=location_id,
+            crop_type=record_data["crop_type"],
+            year=record_data["year"],
+            production_tons=record_data.get("production_tons"),
+            area_feddan=record_data.get("area_feddan"),
+            batch_id=batch_id,
+            source_system=source_system,
+            ingestion_timestamp=_utcnow(),
+        )
+        db.add(record)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        log_error(db, batch_id, "DB_INSERT", str(e), str(record_data))
+        raise e
+
+
+def insert_soil_record(
+    db: Session,
+    record_data: dict,
+    batch_id: int,
+    location_id: int,
+    source_system: str = "JSON_File_Pipeline",
+) -> None:
+    """Insert a single soil record."""
+    from app.models.soil_record import SoilRecord
+    try:
+        record = SoilRecord(
+            location_id=location_id,
+            soil_moisture=record_data.get("soil_moisture"),
+            soil_type=record_data.get("soil_type"),
+            ph=record_data.get("ph"),
+            latitude=record_data.get("latitude"),
+            longitude=record_data.get("longitude"),
+            batch_id=batch_id,
+            source_system=source_system,
+            ingestion_timestamp=_utcnow(),
+        )
+        db.add(record)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        log_error(db, batch_id, "DB_INSERT", str(e), str(record_data))
+        raise e
+
+
+def load_soil_data(filename: str = "egypt_soil_data.json") -> list:
+    """Adapter: load soil records via the soil_loader source connector."""
+    import os
+    from app.search.soil_loader import load_soil_json, _resolve_data_dir
+    try:
+        data_dir = _resolve_data_dir()
+    except FileNotFoundError:
+        raise FileNotFoundError(
+            f"Soil data directory not found. "
+            f"Ensure data/soil/{filename} exists or set PROJECT_ROOT."
+        )
+    filepath = os.path.join(data_dir, filename)
+    return load_soil_json(filepath)

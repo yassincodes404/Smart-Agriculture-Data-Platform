@@ -23,3 +23,5 @@ from app.models.land_soil import LandSoil  # noqa: F401
 from app.models.land_image import LandImage  # noqa: F401
 from app.models.analytics_summary import AnalyticsSummary  # noqa: F401
 from app.models.land_analytics_record import LandAnalyticsRecord  # noqa: F401
+from app.models.crop_production_record import CropProductionRecord  # noqa: F401
+from app.models.soil_record import SoilRecord  # noqa: F401

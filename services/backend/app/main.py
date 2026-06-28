@@ -88,4 +88,4 @@ app.include_router(climate_router, prefix="/api/v1")
 app.include_router(ingestion_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v1")
 app.include_router(lands_router, prefix="/api/v1")
-
+

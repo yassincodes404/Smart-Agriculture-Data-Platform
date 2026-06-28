@@ -92,6 +92,47 @@ def parse_water_csv(content: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, 
     return valid_records, invalid_records
 
 
+def parse_crop_csv(content: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Parses crop production CSV content with per-row error capture.
+
+    Expected columns: governorate, crop_type, year, production_tons, area_feddan
+
+    Returns:
+        (valid_records, invalid_records)
+    """
+    reader = csv.DictReader(StringIO(content))
+    valid_records: List[Dict[str, Any]] = []
+    invalid_records: List[Dict[str, Any]] = []
+
+    required_cols = {"governorate", "crop_type", "year", "production_tons", "area_feddan"}
+    if not reader.fieldnames or not required_cols.issubset(set(reader.fieldnames)):
+        raise ValueError(f"Missing required columns. Expected: {required_cols}")
+
+    for row in reader:
+        try:
+            gov = row["governorate"].strip()
+            crop_type = row["crop_type"].strip()
+            year = int(row["year"])
+            production_tons = float(row["production_tons"])
+            area_feddan = float(row["area_feddan"])
+            if not gov:
+                raise ValueError("Governorate is empty")
+            if not crop_type:
+                raise ValueError("Crop type is empty")
+            valid_records.append({
+                "governorate": gov,
+                "crop_type": crop_type,
+                "year": year,
+                "production_tons": production_tons,
+                "area_feddan": area_feddan,
+            })
+        except Exception as e:
+            invalid_records.append({"record": str(row), "error": str(e)})
+
+    return valid_records, invalid_records
+
+
 # ---------------------------------------------------------------------------
 # Land Analytics Pipeline — Additional Parsers
 # ---------------------------------------------------------------------------
