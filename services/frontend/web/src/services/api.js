@@ -290,3 +290,62 @@ export async function healthCheckDb() {
   const response = await fetch("/api/health/db");
   return response.json();
 }
+
+/* ----------------------------------------------------------------
+   AI Endpoints
+   Backend: app/api/ai.py
+   ---------------------------------------------------------------- */
+
+/** GET /ai/keys — list user's API keys (masked) */
+export async function getAiApiKeys() {
+  return request("/ai/keys");
+}
+
+/** POST /ai/keys — add a new API key */
+export async function addAiApiKey(apiKey, label = null, provider = "groq") {
+  return request("/ai/keys", {
+    method: "POST",
+    body: JSON.stringify({ api_key: apiKey, label, provider }),
+  });
+}
+
+/** DELETE /ai/keys/{key_id} — remove an API key */
+export async function deleteAiApiKey(keyId) {
+  return request(`/ai/keys/${keyId}`, { method: "DELETE" });
+}
+
+/** PATCH /ai/keys/{key_id}/toggle — enable/disable a key */
+export async function toggleAiApiKey(keyId, isActive) {
+  return request(`/ai/keys/${keyId}/toggle`, {
+    method: "PATCH",
+    body: JSON.stringify({ is_active: isActive }),
+  });
+}
+
+/** GET /ai/lands/{land_id}/chat — get chat history */
+export async function getAiChatHistory(landId) {
+  return request(`/ai/lands/${landId}/chat`);
+}
+
+/** POST /ai/lands/{land_id}/chat — send a message */
+export async function sendAiChatMessage(landId, message) {
+  return request(`/ai/lands/${landId}/chat`, {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+}
+
+/** DELETE /ai/lands/{land_id}/chat — clear chat history */
+export async function clearAiChatHistory(landId) {
+  return request(`/ai/lands/${landId}/chat`, { method: "DELETE" });
+}
+
+/** GET /ai/lands/{land_id}/insights — get AI insights */
+export async function getAiInsights(landId) {
+  return request(`/ai/lands/${landId}/insights`);
+}
+
+/** POST /ai/lands/{land_id}/analyze — trigger fresh AI analysis */
+export async function triggerAiAnalysis(landId) {
+  return request(`/ai/lands/${landId}/analyze`, { method: "POST" });
+}

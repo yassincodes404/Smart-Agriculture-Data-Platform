@@ -12,7 +12,7 @@
  *   - Alerts (from analytics)
  */
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   getLandDetail,
@@ -23,8 +23,12 @@ import {
   getCropZones,
   reanalyzeLand,
   updateLandSettings,
+  getAiInsights,
+  triggerAiAnalysis,
 } from "../../services/api";
 import MapViewComponent from "../../components/map/MapViewComponent";
+import AIChatPanel from "../../components/ai/AIChatPanel";
+import VegetationChart from "../../components/charts/VegetationChart";
 import "../Lands.css";
 
 export default function LandDetailsPage() {
@@ -46,6 +50,10 @@ export default function LandDetailsPage() {
   const [reanalyzing, setReanalyzing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [intervalDays, setIntervalDays] = useState(16);
+  const [showAllSoil, setShowAllSoil] = useState(false);
+  const [showAllClimate, setShowAllClimate] = useState(false);
+  const [showAllWater, setShowAllWater] = useState(false);
+  const [aiInsights, setAiInsights] = useState([]);
 
   useEffect(() => {
     async function fetchAll() {
@@ -78,6 +86,10 @@ export default function LandDetailsPage() {
           .catch(() => { });
         getHarvestPrediction(id)
           .then((r) => setHarvest(r))
+          .catch(() => { });
+        // Fetch AI insights (non-blocking)
+        getAiInsights(id)
+          .then((r) => setAiInsights(r.insights || []))
           .catch(() => { });
       } catch (err) {
         setError(err.message);
@@ -144,6 +156,23 @@ export default function LandDetailsPage() {
   // NDVI bar chart from primary crop only
   const ndviBars = primaryCrops.map((c) => Math.round((c.value || 0) * 100));
 
+  const avgSoilMoisture = soil.length > 0 
+    ? (soil.reduce((acc, s) => acc + (s.value || 0), 0) / soil.length).toFixed(1)
+    : "—";
+
+  const avgClimateTemp = climate.length > 0
+    ? (climate.reduce((acc, c) => acc + (c.value || 0), 0) / climate.length).toFixed(1)
+    : "—";
+
+  const reversedSoil = [...soil].reverse();
+  const visibleSoil = showAllSoil ? reversedSoil : reversedSoil.slice(0, 6);
+
+  const reversedClimate = [...climate].reverse();
+  const visibleClimate = showAllClimate ? reversedClimate : reversedClimate.slice(0, 6);
+
+  const reversedWater = [...water].reverse();
+  const visibleWater = showAllWater ? reversedWater : reversedWater.slice(0, 6);
+
   if (loading) {
     return (
       <div className="anim-fade-in" style={{ padding: "var(--space-3xl)" }}>
@@ -180,8 +209,9 @@ export default function LandDetailsPage() {
   };
 
   return (
-    <div className="anim-fade-in">
-      <div className="land-detail">
+    <React.Fragment>
+      <div className="anim-fade-in">
+        <div className="land-detail">
         {/* --- Header --- */}
         <div className="land-detail__header">
           <div className="land-detail__header-info">
@@ -260,6 +290,93 @@ export default function LandDetailsPage() {
           </div>
         )}
 
+        {/* --- AI Insights Section --- */}
+        {aiInsights.length > 0 && (
+          <div className="anim-stagger" style={{ "--stagger-index": 1 }}>
+            <div className="section-header">
+              <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                <h2 className="section-header__title">AI Analysis</h2>
+                <span style={{
+                  background: "linear-gradient(135deg, #f97316, #ea580c)",
+                  color: "#fff",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "2px 8px",
+                  borderRadius: "var(--radius-full)",
+                  letterSpacing: "0.5px",
+                }}>✨ Powered by Groq Vision</span>
+              </div>
+              <span className="badge badge--neutral">{aiInsights.length} insights</span>
+            </div>
+            <div className="insights-grid">
+              {aiInsights.map((insight) => (
+                <div className="insight-card" key={insight.insight_id} style={{
+                  borderLeft: "3px solid #7c3aed",
+                  position: "relative",
+                  overflow: "hidden",
+                }}>
+                  {/* AI shimmer strip */}
+                  <div style={{
+                    position: "absolute",
+                    top: 0, right: 0,
+                    background: "linear-gradient(135deg, #7c3aed22, #4f46e522)",
+                    width: 80, height: 80,
+                    borderRadius: "0 0 0 80px",
+                    pointerEvents: "none",
+                  }} />
+                  <div className="insight-card__header">
+                    <div className="insight-card__icon" style={{ background: "#7c3aed22", color: "#7c3aed" }}>
+                      ✨
+                    </div>
+                    <span className="insight-card__title">{insight.title}</span>
+                  </div>
+                  <p className="insight-card__body" style={{ marginBottom: "var(--space-sm)" }}>
+                    {insight.body}
+                  </p>
+                  {/* Structured data rendering */}
+                  {insight.structured_data && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-xs)", marginTop: "var(--space-sm)" }}>
+                      {insight.structured_data.key_observations?.map((obs, i) => (
+                        <span key={i} className="badge badge--info" style={{ fontSize: 11 }}>
+                          {obs}
+                        </span>
+                      ))}
+                      {insight.structured_data.recommended_action && (
+                        <span className="badge badge--healthy" style={{ fontSize: 11 }}>
+                          ✓ {insight.structured_data.recommended_action}
+                        </span>
+                      )}
+                      {insight.structured_data.risk_flags?.map((flag, i) => (
+                        <span key={i} className="badge badge--warning" style={{ fontSize: 11 }}>
+                          ⚠ {flag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "var(--space-sm)" }}>
+                    {insight.confidence != null && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span className="text-caption">Confidence:</span>
+                        <div style={{ width: 60, height: 4, borderRadius: 2, background: "var(--gray-100)", overflow: "hidden" }}>
+                          <div style={{
+                            height: "100%", borderRadius: 2,
+                            width: `${(insight.confidence * 100).toFixed(0)}%`,
+                            background: "linear-gradient(90deg, #7c3aed, #4f46e5)",
+                          }} />
+                        </div>
+                        <span className="text-caption">{(insight.confidence * 100).toFixed(0)}%</span>
+                      </div>
+                    )}
+                    <span className="text-caption" style={{ fontSize: 10, opacity: 0.6 }}>
+                      {insight.model_used} · {new Date(insight.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* --- Key Metrics (live from API) --- */}
         <div className="anim-stagger" style={{ "--stagger-index": 1 }}>
           <div className="section-header">
@@ -282,7 +399,7 @@ export default function LandDetailsPage() {
               </div>
               <div className="metric-card__label">Temperature</div>
               <div className="metric-card__sub">
-                Humidity: {latestClimate?.payload?.humidity_pct || "—"}%
+                Humidity: {latestClimate?.payload?.humidity_pct ? `${latestClimate.payload.humidity_pct}%` : "—"}
               </div>
             </div>
             <div className="metric-card">
@@ -296,16 +413,18 @@ export default function LandDetailsPage() {
             </div>
             <div className="metric-card">
               <div className="metric-card__value">
-                {latestWater?.payload?.irrigation_status?.replace("_", " ") || "—"}
+                {latestWater?.payload?.crop_water_requirement_mm && land?.area_hectares 
+                  ? `${(latestWater.payload.crop_water_requirement_mm * land.area_hectares * 10).toFixed(0)}m³` 
+                  : "—"}
               </div>
-              <div className="metric-card__label">Irrigation</div>
+              <div className="metric-card__label">Est. Water Needed</div>
               <div className="metric-card__sub">
-                {latestWater ? `${(latestWater.value / 1000).toFixed(0)}m³ used` : "—"}
+                Based on ET₀ {latestWater?.payload?.crop_water_requirement_mm?.toFixed(1) || 0}mm
               </div>
             </div>
             <div className="metric-card">
               <div className="metric-card__value">
-                {primaryCropType?.split("(")[0]?.trim() || "—"}
+                {primaryCropType?.split("(")[0]?.trim() || "Unknown"}
               </div>
               <div className="metric-card__label">Primary Crop</div>
               <div className="metric-card__sub">
@@ -313,12 +432,16 @@ export default function LandDetailsPage() {
               </div>
             </div>
             <div className="metric-card">
-              <div className="metric-card__value" style={{ color: harvest?.days_to_harvest <= 14 ? "var(--amber-500)" : "var(--text-primary)" }}>
-                {harvest?.days_to_harvest != null ? `${harvest.days_to_harvest}d` : "—"}
+              <div className="metric-card__value" style={{ color: harvest?.days_to_harvest <= 14 && harvest?.days_to_harvest > 0 ? "var(--amber-500)" : "var(--text-primary)" }}>
+                {harvest?.days_to_harvest != null 
+                  ? (harvest.days_to_harvest < 0 ? "Harvested" : `${harvest.days_to_harvest}d`)
+                  : "—"}
               </div>
               <div className="metric-card__label">Days to Harvest</div>
               <div className="metric-card__sub">
-                {harvest?.estimated_harvest_start || "—"}
+                {harvest?.days_to_harvest < 0 
+                  ? `Est: ${harvest?.estimated_harvest_start || "—"}` 
+                  : (harvest?.estimated_harvest_start || "—")}
               </div>
             </div>
           </div>
@@ -451,6 +574,13 @@ export default function LandDetailsPage() {
           </div>
         )}
 
+        {/* --- ML Vegetation Features Chart --- */}
+        {crops && crops.length > 0 && (
+          <div className="anim-stagger" style={{ "--stagger-index": 2.6 }}>
+            <VegetationChart history={crops} />
+          </div>
+        )}
+
         {/* --- Satellite Map + Imagery --- */}
         <div className="anim-stagger" style={{ "--stagger-index": 3 }}>
           <div className="section-header">
@@ -565,10 +695,13 @@ export default function LandDetailsPage() {
           <div className="anim-stagger" style={{ "--stagger-index": 4 }}>
             <div className="section-header">
               <h2 className="section-header__title">Soil Intelligence</h2>
-              <span className="badge badge--neutral">{soil.length} readings</span>
+              <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+                <span className="badge badge--info">Avg Moisture: {avgSoilMoisture}%</span>
+                <span className="badge badge--neutral">{soil.length} readings</span>
+              </div>
             </div>
             <div className="grid-3">
-              {soil.map((s, i) => (
+              {visibleSoil.map((s, i) => (
                 <div className="card" key={i}>
                   <div className="text-overline" style={{ marginBottom: "var(--space-sm)" }}>
                     {new Date(s.timestamp).toLocaleDateString()}
@@ -592,6 +725,16 @@ export default function LandDetailsPage() {
                 </div>
               ))}
             </div>
+            {soil.length > 6 && (
+              <div style={{ marginTop: "var(--space-md)", textAlign: "center" }}>
+                <button 
+                  className="btn btn--ghost" 
+                  onClick={() => setShowAllSoil(!showAllSoil)}
+                >
+                  {showAllSoil ? "Show Less" : `Show All (${soil.length})`}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -664,8 +807,8 @@ export default function LandDetailsPage() {
                             <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
                               {zhv.estimated_harvest_start} → {zhv.estimated_harvest_end}
                             </div>
-                            <span className="badge badge--info" style={{ marginTop: 4 }}>
-                              {zhv.days_to_harvest} days remaining
+                            <span className={`badge badge--${zhv.days_to_harvest < 0 ? "healthy" : "info"}`} style={{ marginTop: 4 }}>
+                              {zhv.days_to_harvest < 0 ? "Harvested" : `${zhv.days_to_harvest} days remaining`}
                             </span>
                           </div>
                           <p className="insight-card__body">
@@ -720,8 +863,8 @@ export default function LandDetailsPage() {
                       <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
                         {harvest.estimated_harvest_start} → {harvest.estimated_harvest_end}
                       </div>
-                      <span className="badge badge--info" style={{ marginTop: 4 }}>
-                        {harvest.days_to_harvest} days remaining
+                      <span className={`badge badge--${harvest.days_to_harvest < 0 ? "healthy" : "info"}`} style={{ marginTop: 4 }}>
+                        {harvest.days_to_harvest < 0 ? "Harvested" : `${harvest.days_to_harvest} days remaining`}
                       </span>
                     </div>
                     <p className="insight-card__body">
@@ -740,7 +883,10 @@ export default function LandDetailsPage() {
           <div className="anim-stagger" style={{ "--stagger-index": 6 }}>
             <div className="section-header">
               <h2 className="section-header__title">Climate History</h2>
-              <span className="badge badge--neutral">{climate.length} weeks</span>
+              <div style={{ display: "flex", gap: "var(--space-sm)" }}>
+                <span className="badge badge--info">Avg Temp: {avgClimateTemp}°C</span>
+                <span className="badge badge--neutral">{climate.length} records</span>
+              </div>
             </div>
             <div className="card card--no-hover" style={{ padding: 0, overflow: "hidden" }}>
               <table className="logs-table">
@@ -753,17 +899,27 @@ export default function LandDetailsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {climate.map((c, i) => (
+                  {visibleClimate.map((c, i) => (
                     <tr key={i}>
                       <td>{new Date(c.timestamp).toLocaleDateString()}</td>
                       <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.value}°C</td>
-                      <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.payload?.humidity_pct || "—"}%</td>
+                      <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.payload?.humidity_pct ? `${c.payload.humidity_pct}%` : "—"}</td>
                       <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.payload?.rainfall_mm || 0} mm</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            {climate.length > 6 && (
+              <div style={{ marginTop: "var(--space-md)", textAlign: "center" }}>
+                <button 
+                  className="btn btn--ghost" 
+                  onClick={() => setShowAllClimate(!showAllClimate)}
+                >
+                  {showAllClimate ? "Show Less" : `Show All (${climate.length})`}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -786,7 +942,7 @@ export default function LandDetailsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {water.map((w, i) => (
+                  {visibleWater.map((w, i) => (
                     <tr key={i}>
                       <td>{new Date(w.timestamp).toLocaleDateString()}</td>
                       <td style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -810,9 +966,23 @@ export default function LandDetailsPage() {
                 </tbody>
               </table>
             </div>
+            {water.length > 6 && (
+              <div style={{ marginTop: "var(--space-md)", textAlign: "center" }}>
+                <button 
+                  className="btn btn--ghost" 
+                  onClick={() => setShowAllWater(!showAllWater)}
+                >
+                  {showAllWater ? "Show Less" : `Show All (${water.length})`}
+                </button>
+              </div>
+            )}
           </div>
         )}
+
       </div>
     </div>
+
+    <AIChatPanel landId={id} />
+  </React.Fragment>
   );
 }

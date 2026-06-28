@@ -41,54 +41,66 @@ def execute(land_id: int, db: Session) -> None:
         lon = float(land.longitude)
 
         # ------------------------------------------------------------------
-        # Step 1: Current climate → land_climate
+        # Step 1 & 2: Historical Climate, Soil Moisture, and ET0 Backfill (90 days)
         # ------------------------------------------------------------------
         try:
-            snap = open_meteo.fetch_current_land_climate(lat, lon)
-            if snap:
-                ds = repository.get_or_create_data_source(db, "Open-Meteo")
-                repository.insert_land_climate_snapshot(
-                    db, land_id,
-                    temperature_celsius=snap.get("temperature_celsius"),
-                    humidity_pct=snap.get("humidity_pct"),
-                    rainfall_mm=snap.get("rainfall_mm"),
-                    source_id=int(ds.source_id),
-                )
-                logger.info("climate snapshot saved land_id=%s", land_id)
-        except Exception:
-            logger.exception("climate connector failed land_id=%s (continuing)", land_id)
-
-        # ------------------------------------------------------------------
-        # Step 2: Soil moisture + ET₀ → land_soil + land_water
-        # ------------------------------------------------------------------
-        try:
-            soil_et0 = open_meteo.fetch_soil_and_et0(lat, lon, days=7)
-            if soil_et0:
+            records = open_meteo.fetch_historical_climate(lat, lon, days=90)
+            if records:
                 ds = repository.get_or_create_data_source(db, "Open-Meteo")
                 src_id = int(ds.source_id)
+                from datetime import datetime
+                
+                count_clim, count_soil, count_water = 0, 0, 0
+                for rec in records:
+                    date_str = rec.get("date")
+                    if not date_str:
+                        continue
+                    try:
+                        ts = datetime.strptime(date_str, "%Y-%m-%d")
+                    except ValueError:
+                        continue
+                    
+                    # 1. land_climate
+                    if "temperature_max_c" in rec or "rainfall_mm" in rec:
+                        # Estimate avg temp if needed, or store max. We use temperature_celsius as max temp proxy for daily.
+                        temp = rec.get("temperature_max_c")
+                        rain = rec.get("rainfall_mm")
+                        hum = rec.get("humidity_pct")
+                        row_clim = repository.insert_land_climate_snapshot(
+                            db, land_id,
+                            temperature_celsius=temp,
+                            humidity_pct=hum,
+                            rainfall_mm=rain,
+                            source_id=src_id,
+                        )
+                        row_clim.timestamp = ts
+                        count_clim += 1
 
-                # Soil moisture → land_soil
-                if "soil_moisture_pct" in soil_et0:
-                    repository.insert_land_soil_snapshot(
-                        db, land_id,
-                        moisture_pct=soil_et0["soil_moisture_pct"],
-                        source_id=src_id,
-                    )
-                    logger.info("soil moisture saved land_id=%s  moisture=%.1f%%",
-                                land_id, soil_et0["soil_moisture_pct"])
+                    # 2. land_soil
+                    if "soil_moisture_pct" in rec:
+                        row_soil = repository.insert_land_soil_snapshot(
+                            db, land_id,
+                            moisture_pct=rec["soil_moisture_pct"],
+                            source_id=src_id,
+                        )
+                        row_soil.timestamp = ts
+                        count_soil += 1
+                        
+                    # 3. land_water (ET0)
+                    if "et0_mm" in rec:
+                        row_water = repository.insert_land_water_snapshot(
+                            db, land_id,
+                            crop_water_requirement_mm=rec["et0_mm"],
+                            irrigation_status="unknown",
+                            source_id=src_id,
+                        )
+                        row_water.timestamp = ts
+                        count_water += 1
 
-                # ET₀ → land_water as crop_water_requirement_mm proxy
-                if "et0_mm_per_day" in soil_et0:
-                    repository.insert_land_water_snapshot(
-                        db, land_id,
-                        crop_water_requirement_mm=soil_et0["et0_mm_per_day"],
-                        irrigation_status="unknown",   # will be updated by monitoring
-                        source_id=src_id,
-                    )
-                    logger.info("ET₀ saved land_id=%s  et0=%.2f mm/day",
-                                land_id, soil_et0["et0_mm_per_day"])
+                logger.info("historical backfill saved land_id=%s climate=%d soil=%d water=%d",
+                            land_id, count_clim, count_soil, count_water)
         except Exception:
-            logger.exception("soil/ET₀ connector failed land_id=%s (continuing)", land_id)
+            logger.exception("historical climate connector failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
         # Step 3: NDVI history backfill (last 90 days from MODIS MOD13Q1)
@@ -119,7 +131,25 @@ def execute(land_id: int, db: Session) -> None:
             logger.exception("Sentinel visual task failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
-        # Step 6: Mark land active
+        # Step 6: Crop Detection & Intelligence (AI-based)
+        # ------------------------------------------------------------------
+        try:
+            from app.tasks.crop_task import run_crop_detection_task
+            run_crop_detection_task(land_id, db)
+        except Exception:
+            logger.exception("Crop detection task failed land_id=%s (continuing)", land_id)
+
+        # ------------------------------------------------------------------
+        # Step 7: AI Land Analysis (Groq — runs if user has API keys)
+        # ------------------------------------------------------------------
+        try:
+            from app.ai.land_analyst import run_ai_land_analysis
+            run_ai_land_analysis(land_id, db, user_id=land.user_id)
+        except Exception:
+            logger.exception("AI analysis failed land_id=%s (continuing)", land_id)
+
+        # ------------------------------------------------------------------
+        # Step 8: Mark land active
         # ------------------------------------------------------------------
         repository.update_land_status(db, land_id, "active")
         db.commit()

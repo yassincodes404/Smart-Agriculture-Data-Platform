@@ -22,7 +22,7 @@ export default defineConfig({
     // Proxy API requests to the backend (for local dev without Nginx)
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://backend:8000',
         changeOrigin: true,
       },
     },

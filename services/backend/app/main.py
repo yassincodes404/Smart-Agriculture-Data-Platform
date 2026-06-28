@@ -29,6 +29,7 @@ from app.api.pipeline import router as pipeline_router
 from app.api.lands import router as lands_router
 from app.api.crops import router as crops_router
 from app.api.soil import router as soil_router
+from app.api.ai import router as ai_router
 
 # ---------------------------------------------------------------------------
 # App initialisation
@@ -93,18 +94,7 @@ app.include_router(pipeline_router, prefix="/api/v1")
 app.include_router(lands_router, prefix="/api/v1")
 app.include_router(crops_router, prefix="/api/v1")
 app.include_router(soil_router, prefix="/api/v1")
+app.include_router(ai_router, prefix="/api/v1")
 
-# ---------------------------------------------------------------------------
-# Static file serving — satellite images, processed PNGs
-# ---------------------------------------------------------------------------
+# Removed static images mount since they are now served from the database
 
-import os
-
-_images_dir = os.environ.get("IMAGES_DIR", "/data/images")
-if os.path.isdir(_images_dir):
-    app.mount(
-        "/api/v1/static/images",
-        StaticFiles(directory=_images_dir),
-        name="satellite-images",
-    )
-

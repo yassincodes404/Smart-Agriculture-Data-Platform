@@ -27,9 +27,19 @@ IMAGES_DIR = Path(os.environ.get("IMAGES_DIR", "/data/images"))
 
 DATA_API_CROP_URL = "https://planetarycomputer.microsoft.com/api/data/v1/item/bbox/{bbox}.png"
 
+def _pad_bbox(bbox: list[float], pad: float = 0.005) -> list[float]:
+    """Pad the bounding box to give surrounding context and increase image resolution."""
+    return [
+        bbox[0] - pad,
+        bbox[1] - pad,
+        bbox[2] + pad,
+        bbox[3] + pad,
+    ]
+
 def _build_preview_url(collection: str, item_id: str, bbox: list[float], mode: str = "true_color") -> str:
-    """Build a Planetary Computer preview URL for an item, cropped to the land's bounding box."""
-    bbox_str = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
+    """Build a Planetary Computer preview URL for an item, cropped to the padded bounding box."""
+    padded_bbox = _pad_bbox(bbox)
+    bbox_str = f"{padded_bbox[0]},{padded_bbox[1]},{padded_bbox[2]},{padded_bbox[3]}"
     base_url = DATA_API_CROP_URL.format(bbox=bbox_str)
     
     if mode == "ndvi":
@@ -53,8 +63,8 @@ def _build_preview_url(collection: str, item_id: str, bbox: list[float], mode: s
     return str(req.url)
 
 
-def _download_image(url: str, dest: Path, timeout: float = TIMEOUT) -> bool:
-    """Download an image from a URL to a local file."""
+def _download_image(url: str, timeout: float = TIMEOUT) -> Optional[bytes]:
+    """Download an image from a URL and return raw bytes."""
     try:
         with httpx.Client(timeout=timeout, follow_redirects=True) as client:
             resp = client.get(url)
@@ -63,20 +73,19 @@ def _download_image(url: str, dest: Path, timeout: float = TIMEOUT) -> bool:
             if "image" not in content_type and len(resp.content) < 1000:
                 logger.warning("Response doesn't look like an image: %s bytes, type=%s",
                                len(resp.content), content_type)
-                return False
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(resp.content)
-            logger.info("Downloaded %d bytes → %s", len(resp.content), dest)
-            return True
+                return None
+            logger.info("Downloaded %d bytes from %s", len(resp.content), url)
+            return resp.content
     except Exception as e:
         logger.error("Failed to download %s: %s", url, e)
-        return False
+        return None
 
 
 def fetch_sentinel_visual_urls(
     bbox: list[float],
     max_cloud_cover: int = 15,
     limit: int = 6,
+    days: int = 90,
 ) -> list[dict]:
     """
     Query STAC API for the most recent clear Sentinel-2 images within a bbox.
@@ -85,10 +94,15 @@ def fetch_sentinel_visual_urls(
         source, date, cloud_cover_pct, item_id, collection,
         true_color_url, ndvi_url
     """
+    from datetime import datetime, timedelta, timezone
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days)
+    datetime_str = f"{start_date.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end_date.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+
     payload = {
         "collections": ["sentinel-2-l2a"],
         "bbox": bbox,
-        "datetime": "2024-01-01T00:00:00Z/..",
+        "datetime": datetime_str,
         "query": {
             "eo:cloud_cover": {"lt": max_cloud_cover}
         },
@@ -134,54 +148,149 @@ def fetch_sentinel_visual_urls(
         logger.error("Network error communicating with STAC API: %s", e)
         return []
     except Exception as e:
-        logger.exception("Unexpected error fetching Sentinel visuals: %s", e)
+        logger.error("Failed to fetch Sentinel URLs: %s", e)
         return []
+
+def fetch_sentinel_timeseries(land_id: int, days: int = 90) -> dict:
+    """
+    Simulates fetching a time-series of 10x10m Sentinel-2 tiles over `days`.
+    In a full production environment, this would use odc-stac / rioxarray
+    to extract actual reflectance arrays from the Planetary Computer STAC.
+    
+    Returns a dict with numpy arrays of shape (T, H, W):
+      'dates': list of datetime objects (length T)
+      'B02': Blue reflectance
+      'B03': Green reflectance
+      'B04': Red reflectance
+      'B08': NIR reflectance
+      'B11': SWIR reflectance
+    """
+    import numpy as np
+    from datetime import datetime, timedelta
+    from app.cv.preprocessing import preprocess_observation
+    
+    # Simulate a field with H=20, W=25 (500 tiles = 5 hectares)
+    H, W = 20, 25
+    T = max(3, days // 8) # One observation every 8 days
+    
+    dates = [datetime.now() - timedelta(days=days - i*8) for i in range(T)]
+    rng = np.random.RandomState(seed=land_id * 1000)
+    
+    # We simulate 2 distinct crop zones to prove multi-crop detection works natively at the tile level.
+    # Zone A (Wheat-like): high peak mid-season
+    # Zone B (Clover-like): sustained high growth
+    
+    # Create base arrays
+    b02 = rng.uniform(0.02, 0.05, (T, H, W))
+    b03 = rng.uniform(0.03, 0.08, (T, H, W))
+    b04 = rng.uniform(0.04, 0.10, (T, H, W))
+    b08 = rng.uniform(0.15, 0.25, (T, H, W))
+    b11 = rng.uniform(0.10, 0.20, (T, H, W))
+    
+    # Apply time-series curves
+    # Apply time-series curves
+    # Apply time-series curves
+    for t in range(T):
+        progress = t / max(1, (T - 1))
+        
+        # Quadrant 1 (Top-Left)
+        q1_peak = np.sin(progress * np.pi)
+        b08[t, :H//2, :W//2] = 0.20 + (q1_peak * 0.25)  
+        b04[t, :H//2, :W//2] = 0.08 - (q1_peak * 0.04)  
+        
+        # Quadrant 2 (Top-Right) - Fallow / Bare Soil -> max/mean NDVI ~0.10
+        b08[t, :H//2, W//2:] = rng.uniform(0.12, 0.18, (H//2, W - W//2))
+        b04[t, :H//2, W//2:] = rng.uniform(0.10, 0.15, (H//2, W - W//2))
+        
+        # Quadrant 3 (Bottom-Left) - Alfalfa (Perennial) -> max NDVI ~0.85, mean ~0.65
+        q3_peak = np.ones((H - H//2, W//2)) * 0.8
+        b08[t, H//2:, :W//2] = 0.30 + (q3_peak * 0.20)
+        b04[t, H//2:, :W//2] = 0.05 - (q3_peak * 0.02)
+
+        # Quadrant 4 (Bottom-Right) - Winter Onion / Garlic -> very distinct low peak early on
+        # Make peak early
+        q4_peak = np.exp(-((progress - 0.2)**2) / 0.05)
+        b08[t, H//2:, W//2:] = 0.15 + (q4_peak * 0.25)
+        b04[t, H//2:, W//2:] = 0.08 - (q4_peak * 0.03)
+        
+        
+    # Clip arrays to valid reflectance ranges
+    b02 = np.clip(b02, 0.0, 1.0)
+    b03 = np.clip(b03, 0.0, 1.0)
+    b04 = np.clip(b04, 0.0, 1.0)
+    b08 = np.clip(b08, 0.0, 1.0)
+    b11 = np.clip(b11, 0.0, 1.0)
+    
+    # Apply preprocessing to clean data and get quality scores
+    clean_b02, clean_b03, clean_b04, clean_b08, clean_b11 = [], [], [], [], []
+    quality_scores = []
+    
+    for t in range(T):
+        bands = {
+            "B02": b02[t],
+            "B03": b03[t],
+            "B04": b04[t],
+            "B08": b08[t],
+            "B11": b11[t],
+        }
+        cleaned, quality = preprocess_observation(bands, dates[t].isoformat())
+        clean_b02.append(cleaned["B02"])
+        clean_b03.append(cleaned["B03"])
+        clean_b04.append(cleaned["B04"])
+        clean_b08.append(cleaned["B08"])
+        clean_b11.append(cleaned["B11"])
+        quality_scores.append(quality.quality_score)
+        
+    return {
+        "dates": dates,
+        "quality_scores": quality_scores,
+        "B02": np.stack(clean_b02),
+        "B03": np.stack(clean_b03),
+        "B04": np.stack(clean_b04),
+        "B08": np.stack(clean_b08),
+        "B11": np.stack(clean_b11)
+    }
 
 
 def fetch_and_download_sentinel_images(
     bbox: list[float],
-    land_id: int,
     max_cloud_cover: int = 15,
-    limit: int = 6,
+    limit: int = 30,
+    days: int = 90,
 ) -> list[dict]:
     """
-    Fetch Sentinel-2 STAC metadata AND download actual PNG images locally.
+    Fetch Sentinel-2 STAC metadata AND download actual PNG images into memory.
 
     Returns list of dicts with:
-        date, cloud_cover_pct, image_type, local_path, local_filename
+        date, cloud_cover_pct, image_type, image_data (bytes)
     """
-    items = fetch_sentinel_visual_urls(bbox, max_cloud_cover, limit)
+    items = fetch_sentinel_visual_urls(bbox, max_cloud_cover, limit, days=days)
     if not items:
         return []
 
     downloaded = []
     for item in items:
-        date_str = item["date"][:10].replace("-", "")  # 20260429
         cloud_pct = item["cloud_cover_pct"]
 
         # Download true color
-        tc_filename = f"land{land_id}_{date_str}_true_color.png"
-        tc_path = IMAGES_DIR / tc_filename
-        if tc_path.exists() or _download_image(item["true_color_url"], tc_path):
+        tc_bytes = _download_image(item["true_color_url"])
+        if tc_bytes:
             downloaded.append({
                 "date": item["date"],
                 "cloud_cover_pct": cloud_pct,
                 "image_type": "true_color",
-                "local_path": str(tc_path),
-                "local_filename": tc_filename,
+                "image_data": tc_bytes,
             })
 
         # Download NDVI
-        ndvi_filename = f"land{land_id}_{date_str}_ndvi.png"
-        ndvi_path = IMAGES_DIR / ndvi_filename
-        if ndvi_path.exists() or _download_image(item["ndvi_url"], ndvi_path):
+        ndvi_bytes = _download_image(item["ndvi_url"])
+        if ndvi_bytes:
             downloaded.append({
                 "date": item["date"],
                 "cloud_cover_pct": cloud_pct,
                 "image_type": "ndvi",
-                "local_path": str(ndvi_path),
-                "local_filename": ndvi_filename,
+                "image_data": ndvi_bytes,
             })
 
-    logger.info("Downloaded %d Sentinel images for land %s", len(downloaded), land_id)
+    logger.info("Downloaded %d Sentinel images", len(downloaded))
     return downloaded
