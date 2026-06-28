@@ -165,6 +165,7 @@ def reanalyze_land(
     land_id: int,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
     Queue a background task to:
@@ -180,6 +181,8 @@ def reanalyze_land(
     from app.tasks.satellite_task import run_ndvi_history_backfill
     from app.tasks.crop_task import run_crop_detection_task
     from app.ai.land_analyst import run_ai_land_analysis
+    
+    uid = current_user.user_id if current_user else None
 
     def _run_fetch():
         from app.db.session import SessionLocal
@@ -197,7 +200,7 @@ def reanalyze_land(
             run_crop_detection_task(land_id, local_db, days=90)
 
             # Generate new AI Insights
-            run_ai_land_analysis(land_id, local_db, user_id=None)
+            run_ai_land_analysis(land_id, local_db, user_id=uid)
         finally:
             local_db.close()
 

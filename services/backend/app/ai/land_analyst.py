@@ -171,81 +171,7 @@ def run_ai_land_analysis(land_id: int, db: Session, user_id: Optional[int] = Non
 
     insights_created = []
 
-    # ---- Insight 1: Overall Crop & NDVI Analysis ----
-    insight = _request_insight(
-        client=client,
-        land_id=land_id,
-        db=db,
-        insight_type="crop_analysis",
-        title_fallback="AI Crop Health Analysis",
-        prompt=f"""Analyze this farm data and return ONLY valid JSON (no markdown, no extra text):
-{{
-  "title": "short headline max 10 words",
-  "summary": "2-3 sentence expert analysis of crop health based on NDVI trends",
-  "ndvi_assessment": "excellent|good|fair|poor|critical",
-  "key_observations": ["observation 1", "observation 2", "observation 3"],
-  "recommended_action": "specific action the farmer should take now",
-  "risk_flags": ["risk 1 if any"],
-  "confidence": 0.0
-}}
-
-Farm data:
-{json.dumps(context, indent=2)}"""
-    )
-    if insight:
-        insights_created.append(insight)
-
-    # ---- Insight 2: Irrigation & Water Advice ----
-    if context.get("recent_soil") or context.get("recent_climate"):
-        insight = _request_insight(
-            client=client,
-            land_id=land_id,
-            db=db,
-            insight_type="irrigation_advice",
-            title_fallback="AI Irrigation Assessment",
-            prompt=f"""Based on this farm's soil moisture and climate data, return ONLY valid JSON:
-{{
-  "title": "short headline max 10 words",
-  "summary": "2-3 sentence irrigation assessment",
-  "irrigation_status": "adequate|needed_soon|overdue|excessive",
-  "recommended_water_mm": 0.0,
-  "next_irrigation_days": 0,
-  "key_observations": ["observation 1", "observation 2"],
-  "confidence": 0.0
-}}
-
-Farm data (focus on soil moisture and climate):
-{json.dumps({"soil": context.get("recent_soil", []), "climate": context.get("recent_climate", []), "land": context.get("land", {})}, indent=2)}"""
-        )
-        if insight:
-            insights_created.append(insight)
-
-    # ---- Insight 3: Harvest Timing (if crop zones present) ----
-    if context.get("crop_zones") and context.get("spectral_history"):
-        insight = _request_insight(
-            client=client,
-            land_id=land_id,
-            db=db,
-            insight_type="harvest_timing",
-            title_fallback="AI Harvest Timing Estimate",
-            prompt=f"""Based on the NDVI progression and crop type data, return ONLY valid JSON:
-{{
-  "title": "short headline max 10 words",
-  "summary": "2-3 sentence harvest timing analysis covering all detected crops",
-  "key_observations": ["observation 1 (e.g. Alfalfa readiness)", "observation 2 (e.g. Wheat is overdue/harvested)"],
-  "recommended_action": "e.g. Harvest Alfalfa now, wait for Wheat",
-  "confidence": 0.0
-}}
-
-Ensure your analysis handles the MULTI-CROP nature of the farm. Evaluate each crop independently.
-
-Farm data:
-{json.dumps({"crop_zones": context.get("crop_zones", []), "spectral_history": context.get("spectral_history", [])[-15:], "land": context.get("land", {})}, indent=2)}"""
-        )
-        if insight:
-            insights_created.append(insight)
-
-    # ---- Insight 4: Multi-Spectral & Vision Analysis ----
+    # ---- Single Combined Prompt to Save API Quota ----
     images_payload = []
     try:
         from app.models.land_image import LandImage
@@ -263,33 +189,86 @@ Farm data:
     except Exception as e:
         logger.warning("Could not fetch images for AI context: %s", e)
 
-    insight = _request_insight(
+    combined_prompt = f"""You are analyzing a farm. Return ONLY valid JSON with 4 distinct insights.
+    
+Format:
+{{
+  "crop_analysis": {{
+    "title": "short headline max 10 words",
+    "summary": "2-3 sentence expert analysis of crop health",
+    "ndvi_assessment": "excellent|good|fair|poor|critical",
+    "key_observations": ["obs 1"],
+    "recommended_action": "specific action",
+    "risk_flags": ["risk 1"],
+    "confidence": 0.0
+  }},
+  "irrigation_advice": {{
+    "title": "short headline",
+    "summary": "2-3 sentence irrigation assessment",
+    "irrigation_status": "adequate|needed_soon|overdue|excessive",
+    "recommended_water_mm": 0.0,
+    "next_irrigation_days": 0,
+    "key_observations": ["obs 1"],
+    "confidence": 0.0
+  }},
+  "harvest_timing": {{
+    "title": "short headline",
+    "summary": "harvest timing analysis for all crops",
+    "key_observations": ["obs 1"],
+    "recommended_action": "e.g. Harvest Alfalfa now",
+    "confidence": 0.0
+  }},
+  "vision_analysis": {{
+    "title": "short headline",
+    "summary": "multimodal analysis comparing spectral indices and images (if provided)",
+    "spectral_assessment": "excellent|good|fair|poor|critical",
+    "key_observations": ["obs 1"],
+    "recommended_action": "action",
+    "risk_flags": [],
+    "confidence": 0.0
+  }}
+}}
+
+Farm data context:
+{json.dumps(context, indent=2)}"""
+
+    combined_insight = _request_insight(
         client=client,
         land_id=land_id,
         db=db,
-        insight_type="vision_analysis",
-        title_fallback="Advanced Multi-Spectral & Visual Analysis",
-        prompt=f"""You have been provided with up to 180 days of multi-spectral index history (NDVI, EVI, GNDVI, NDWI, SAVI) AND the most recent satellite images of the farm (if attached).
-        
-Cross-reference the numerical indices (e.g. is EVI showing strong biomass but NDWI showing water stress?) with any visual anomalies you can spot in the attached satellite images (e.g. uneven crop growth, dry patches, or boundary issues).
-
-Return ONLY valid JSON:
-{{
-  "title": "short headline max 10 words",
-  "summary": "3-4 sentence comprehensive multimodal analysis",
-  "spectral_assessment": "excellent|good|fair|poor|critical",
-  "key_observations": ["observation 1", "observation 2", "observation 3"],
-  "recommended_action": "specific multi-spectral or visual-based recommendation",
-  "risk_flags": ["risk 1 if any"],
-  "confidence": 0.0
-}}
-
-Farm Data (Spectral History & Crop Zones):
-{json.dumps({"spectral_history": context.get("spectral_history", []), "crop_zones": context.get("crop_zones", [])}, indent=2)}""",
+        insight_type="combined",
+        title_fallback="AI Analysis",
+        prompt=combined_prompt,
         images=images_payload if images_payload else None
     )
-    if insight:
-        insights_created.append(insight)
+
+    if combined_insight and combined_insight.structured_data:
+        # The _request_insight helper saved the combined insight into the DB. 
+        # But we actually want to split it into 4 rows and delete the combined one.
+        db.delete(combined_insight)
+        db.flush()
+        
+        data = combined_insight.structured_data
+        
+        for key, insight_type in [
+            ("crop_analysis", "crop_analysis"), 
+            ("irrigation_advice", "irrigation_advice"), 
+            ("harvest_timing", "harvest_timing"), 
+            ("vision_analysis", "vision_analysis")
+        ]:
+            if key in data and data[key]:
+                section = data[key]
+                new_insight = LandAiInsight(
+                    land_id=land_id,
+                    insight_type=insight_type,
+                    title=section.get("title", f"AI {insight_type.replace('_', ' ').title()}"),
+                    body=section.get("summary", ""),
+                    structured_data=section,
+                    confidence=section.get("confidence"),
+                    model_used=combined_insight.model_used,
+                )
+                db.add(new_insight)
+                insights_created.append(new_insight)
 
     db.commit()
     logger.info("AI analysis complete for land_id=%s — %d insights created", land_id, len(insights_created))
@@ -321,7 +300,7 @@ def _request_insight(
             {"role": "user", "content": prompt},
         ]
         
-    response = client.chat(messages, max_tokens=800, temperature=0.2)
+    response = client.chat(messages, max_tokens=2048, temperature=0.2)
     if not response:
         return None
 
