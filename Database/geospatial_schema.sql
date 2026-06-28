@@ -11,8 +11,10 @@ CREATE TABLE IF NOT EXISTS lands (
     latitude DECIMAL(10,8) NOT NULL,
     longitude DECIMAL(11,8) NOT NULL,
     boundary_polygon JSON NULL,
+    area_hectares DECIMAL(12,4) NULL,
     description TEXT NULL,
     status VARCHAR(32) NOT NULL DEFAULT 'processing',
+    monitoring_interval_days INT NOT NULL DEFAULT 16,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_lands_status (status),
     INDEX idx_lands_lat_lng (latitude, longitude)

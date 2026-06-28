@@ -5,7 +5,7 @@
  * Fetches real data from GET /api/v1/lands.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { listLands } from "../../services/api";
 import "../Lands.css";
@@ -18,20 +18,22 @@ export default function LandsPage() {
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    async function fetchLands() {
-      setLoading(true);
-      try {
-        const res = await listLands();
-        setLands(res.lands || []);
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+  const fetchLands = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await listLands();
+      setLands(res.lands || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
     }
-    fetchLands();
   }, []);
+
+  useEffect(() => {
+    fetchLands();
+  }, [fetchLands]);
 
   const statusColor = (status) => {
     if (status === "ready" || status === "active") return "healthy";
@@ -110,6 +112,9 @@ export default function LandsPage() {
       {error && (
         <div className="alert alert--error" style={{ marginBottom: "var(--space-lg)" }}>
           <strong>Error:</strong> {error}
+          <button className="btn btn--secondary btn--sm" onClick={fetchLands} style={{ marginLeft: "auto" }}>
+            Retry
+          </button>
         </div>
       )}
 

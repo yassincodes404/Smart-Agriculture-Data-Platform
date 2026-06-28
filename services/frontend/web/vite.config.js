@@ -1,8 +1,12 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { fileURLToPath, URL } from 'node:url'
+
+const appRoot = fileURLToPath(new URL('.', import.meta.url))
 
 // https://vite.dev/config/
 export default defineConfig({
+  root: appRoot,
   plugins: [react()],
   server: {
     host: '0.0.0.0',
@@ -22,7 +26,7 @@ export default defineConfig({
     // Proxy API requests to the backend (for local dev without Nginx)
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.VITE_API_URL || 'http://localhost:8000',
         changeOrigin: true,
       },
     },
