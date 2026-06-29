@@ -27,7 +27,34 @@ IMAGES_DIR = Path(os.environ.get("IMAGES_DIR", "/data/images"))
 
 DATA_API_CROP_URL = "https://planetarycomputer.microsoft.com/api/data/v1/item/bbox/{bbox}.png"
 
-def _pad_bbox(bbox: list[float], pad: float = 0.005) -> list[float]:
+import math
+
+def compute_bbox_from_area(lat: float, lon: float, area_ha: float) -> list[float]:
+    """
+    Compute a bounding box centered at (lat, lon) that covers a given area in hectares.
+    Adds a small buffer to ensure the full field is captured.
+    """
+    # 1 hectare = 10,000 square meters
+    area_sq_m = area_ha * 10000.0
+    # Approximate field as a circle, compute radius
+    radius_m = math.sqrt(area_sq_m / math.pi)
+    # Add 15% buffer
+    radius_m *= 1.15
+    # Convert meters to degrees (1 degree ~ 111320 meters at equator)
+    # Adjust longitude scaling by latitude
+    lat_rad = math.radians(lat)
+    radius_deg_lat = radius_m / 111320.0
+    radius_deg_lon = radius_m / (111320.0 * math.cos(lat_rad))
+    
+    return [
+        lon - radius_deg_lon,
+        lat - radius_deg_lat,
+        lon + radius_deg_lon,
+        lat + radius_deg_lat,
+    ]
+
+
+def _pad_bbox(bbox: list[float], pad: float = 0.002) -> list[float]:
     """Pad the bounding box to give surrounding context and increase image resolution."""
     return [
         bbox[0] - pad,
@@ -84,7 +111,7 @@ def _download_image(url: str, timeout: float = TIMEOUT) -> Optional[bytes]:
 def fetch_sentinel_visual_urls(
     bbox: list[float],
     max_cloud_cover: int = 15,
-    limit: int = 6,
+    limit: int = 60,
     days: int = 90,
 ) -> list[dict]:
     """
@@ -151,11 +178,9 @@ def fetch_sentinel_visual_urls(
         logger.error("Failed to fetch Sentinel URLs: %s", e)
         return []
 
-def fetch_sentinel_timeseries(land_id: int, days: int = 90) -> dict:
+def fetch_sentinel_timeseries(bbox: list[float], days: int = 90, update_progress=None) -> dict:
     """
-    Simulates fetching a time-series of 10x10m Sentinel-2 tiles over `days`.
-    In a full production environment, this would use odc-stac / rioxarray
-    to extract actual reflectance arrays from the Planetary Computer STAC.
+    Fetches a real time-series of Sentinel-2 L2A tiles over `days` using STAC.
     
     Returns a dict with numpy arrays of shape (T, H, W):
       'dates': list of datetime objects (length T)
@@ -166,101 +191,127 @@ def fetch_sentinel_timeseries(land_id: int, days: int = 90) -> dict:
       'B11': SWIR reflectance
     """
     import numpy as np
-    from datetime import datetime, timedelta
-    from app.cv.preprocessing import preprocess_observation
+    from datetime import datetime, timedelta, timezone
+    from pystac_client import Client
+    import planetary_computer
+    import odc.stac
+    import pandas as pd
     
-    # Simulate a field with H=20, W=25 (500 tiles = 5 hectares)
-    H, W = 20, 25
-    T = max(3, days // 8) # One observation every 8 days
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days)
+    datetime_str = f"{start_date.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end_date.strftime('%Y-%m-%dT%H:%M:%SZ')}"
     
-    dates = [datetime.now() - timedelta(days=days - i*8) for i in range(T)]
-    rng = np.random.RandomState(seed=land_id * 1000)
-    
-    # We simulate 4 distinct crop zones per land.
-    # To prevent all lands from looking identical, we add variance based on the seeded rng.
-    amp_var = rng.uniform(0.8, 1.2, size=4)
-    peak_shift = rng.uniform(-0.2, 0.2, size=4)
-    
-    # Shuffle which quadrant gets which crop type
-    # Types: 0=Wheat-like, 1=Bare Soil, 2=Alfalfa, 3=Winter Onion
-    crop_types = [0, 1, 2, 3]
-    rng.shuffle(crop_types)
-    
-    # Create base arrays
-    b02 = rng.uniform(0.02, 0.05, (T, H, W))
-    b03 = rng.uniform(0.03, 0.08, (T, H, W))
-    b04 = rng.uniform(0.04, 0.10, (T, H, W))
-    b08 = rng.uniform(0.15, 0.25, (T, H, W))
-    b11 = rng.uniform(0.10, 0.20, (T, H, W))
-    
-    # Apply time-series curves
-    for t in range(T):
-        progress = t / max(1, (T - 1))
+    if update_progress:
+        update_progress(f"Connecting to Planetary Computer STAC (searching past {days} days)...")
         
-        quadrants = [
-            (slice(None, H//2), slice(None, W//2)),
-            (slice(None, H//2), slice(W//2, None)),
-            (slice(H//2, None), slice(None, W//2)),
-            (slice(H//2, None), slice(W//2, None))
-        ]
-        
-        for i, (q_y, q_x) in enumerate(quadrants):
-            c_type = crop_types[i]
-            q_shape = b08[t, q_y, q_x].shape
-            
-            if c_type == 0: # Wheat-like
-                q_prog = np.clip(progress + peak_shift[0], 0, 1)
-                peak = np.sin(q_prog * np.pi) * amp_var[0]
-                b08[t, q_y, q_x] = 0.20 + (peak * 0.25) + rng.uniform(-0.02, 0.02, q_shape)
-                b04[t, q_y, q_x] = 0.08 - (peak * 0.04) + rng.uniform(-0.01, 0.01, q_shape)
-            elif c_type == 1: # Fallow / Bare Soil
-                b08[t, q_y, q_x] = rng.uniform(0.12, 0.18, q_shape) * amp_var[1]
-                b04[t, q_y, q_x] = rng.uniform(0.10, 0.15, q_shape) * amp_var[1]
-            elif c_type == 2: # Alfalfa
-                peak = 0.8 * amp_var[2]
-                b08[t, q_y, q_x] = 0.30 + (peak * 0.20) + rng.uniform(-0.02, 0.02, q_shape)
-                b04[t, q_y, q_x] = 0.05 - (peak * 0.02) + rng.uniform(-0.01, 0.01, q_shape)
-            elif c_type == 3: # Winter Onion
-                peak = np.exp(-((progress - (0.2 - peak_shift[3]))**2) / 0.05) * amp_var[3]
-                b08[t, q_y, q_x] = 0.15 + (peak * 0.25) + rng.uniform(-0.02, 0.02, q_shape)
-                b04[t, q_y, q_x] = 0.08 - (peak * 0.03) + rng.uniform(-0.01, 0.01, q_shape)
-        
-        
-    # Clip arrays to valid reflectance ranges
-    b02 = np.clip(b02, 0.0, 1.0)
-    b03 = np.clip(b03, 0.0, 1.0)
-    b04 = np.clip(b04, 0.0, 1.0)
-    b08 = np.clip(b08, 0.0, 1.0)
-    b11 = np.clip(b11, 0.0, 1.0)
+    client = Client.open(
+        "https://planetarycomputer.microsoft.com/api/stac/v1",
+        modifier=planetary_computer.sign_inplace,
+    )
+
+    search = client.search(
+        collections=["sentinel-2-l2a"],
+        bbox=bbox,
+        datetime=datetime_str,
+        query={"eo:cloud_cover": {"lt": 20}}
+    )
     
-    # Apply preprocessing to clean data and get quality scores
+    items = list(search.items())
+    if not items:
+        if update_progress:
+            update_progress("No clear Sentinel-2 imagery found. Falling back to empty arrays.")
+        return {"dates": [], "quality_scores": [], "B02": np.array([]), "B03": np.array([]), "B04": np.array([]), "B08": np.array([]), "B11": np.array([])}
+        
+    if update_progress:
+        update_progress(f"Found {len(items)} matching satellite scenes. Downloading multi-spectral bands (B02, B03, B04, B08, B11)...")
+        
+    # Load data using odc.stac (10m resolution approx = 0.0001 deg)
+    ds = odc.stac.load(
+        items,
+        bbox=bbox,
+        bands=["B02", "B03", "B04", "B08", "B11", "SCL"], # SCL is scene classification layer for cloud masking
+        crs="EPSG:4326",
+        resolution=0.0001,
+        chunks={"time": 1, "latitude": 1024, "longitude": 1024}
+    )
+    
+    if update_progress:
+        update_progress("Computing multi-spectral arrays in memory using Dask...")
+        
+    # Compute the dataset (download happens here)
+    ds = ds.compute()
+    
+    # --- DATA ENGINEERING ENHANCEMENT ---
+    # Save the raw multi-spectral data to disk for Data Scientists before extracting NumPy arrays.
+    import os
+    save_dir = "/app/data/raw/sentinel2"
+    os.makedirs(save_dir, exist_ok=True)
+    try:
+        # Create a unique filename based on the bbox and current date
+        filename = f"stac_{abs(int(bbox[0]*100))}_{abs(int(bbox[1]*100))}_{end_date.strftime('%Y%m%d')}.nc"
+        filepath = os.path.join(save_dir, filename)
+        if update_progress:
+            update_progress(f"Saving raw GeoTIFF/NetCDF data to {filepath} for ML Training...")
+        ds.to_netcdf(filepath)
+    except Exception as e:
+        logger.error("Failed to save raw Sentinel-2 NetCDF: %s", e)
+    # ------------------------------------
+    
+    # Scale factors for Sentinel-2 L2A on Planetary Computer: Reflectance = DN / 10000
+    # Create numpy arrays (T, H, W)
+    b02 = (ds.B02.values / 10000.0).astype(np.float32)
+    b03 = (ds.B03.values / 10000.0).astype(np.float32)
+    b04 = (ds.B04.values / 10000.0).astype(np.float32)
+    b08 = (ds.B08.values / 10000.0).astype(np.float32)
+    b11 = (ds.B11.values / 10000.0).astype(np.float32)
+    scl = ds.SCL.values
+    
+    dates = pd.to_datetime(ds.time.values).to_pydatetime().tolist()
+    
+    if update_progress:
+        update_progress("Applying cloud masking and quality scoring...")
+        
+    # Apply cloud masking (SCL values: 4=Vegetation, 5=Bare Soils, 6=Water, 3=Cloud shadows, 8,9,10=Clouds)
+    # We will mask out 3, 8, 9, 10
+    invalid_mask = np.isin(scl, [3, 8, 9, 10, 0, 1])
+    
     clean_b02, clean_b03, clean_b04, clean_b08, clean_b11 = [], [], [], [], []
     quality_scores = []
+    clean_dates = []
     
-    for t in range(T):
-        bands = {
-            "B02": b02[t],
-            "B03": b03[t],
-            "B04": b04[t],
-            "B08": b08[t],
-            "B11": b11[t],
-        }
-        cleaned, quality = preprocess_observation(bands, dates[t].isoformat())
-        clean_b02.append(cleaned["B02"])
-        clean_b03.append(cleaned["B03"])
-        clean_b04.append(cleaned["B04"])
-        clean_b08.append(cleaned["B08"])
-        clean_b11.append(cleaned["B11"])
-        quality_scores.append(quality.quality_score)
+    for t in range(len(dates)):
+        # Calculate quality (percentage of valid pixels)
+        valid_pct = 1.0 - np.mean(invalid_mask[t])
+        
+        # If image is mostly clouds, skip it entirely
+        if valid_pct < 0.2:
+            continue
+            
+        # Apply mask (set invalid to NaN)
+        m = invalid_mask[t]
+        
+        b02_t = np.where(m, np.nan, b02[t])
+        b03_t = np.where(m, np.nan, b03[t])
+        b04_t = np.where(m, np.nan, b04[t])
+        b08_t = np.where(m, np.nan, b08[t])
+        b11_t = np.where(m, np.nan, b11[t])
+        
+        clean_b02.append(b02_t)
+        clean_b03.append(b03_t)
+        clean_b04.append(b04_t)
+        clean_b08.append(b08_t)
+        clean_b11.append(b11_t)
+        quality_scores.append(valid_pct)
+        clean_dates.append(dates[t])
         
     return {
-        "dates": dates,
+        "dates": clean_dates,
         "quality_scores": quality_scores,
-        "B02": np.stack(clean_b02),
-        "B03": np.stack(clean_b03),
-        "B04": np.stack(clean_b04),
-        "B08": np.stack(clean_b08),
-        "B11": np.stack(clean_b11)
+        "B02": np.stack(clean_b02) if clean_b02 else np.array([]),
+        "B03": np.stack(clean_b03) if clean_b03 else np.array([]),
+        "B04": np.stack(clean_b04) if clean_b04 else np.array([]),
+        "B08": np.stack(clean_b08) if clean_b08 else np.array([]),
+        "B11": np.stack(clean_b11) if clean_b11 else np.array([]),
     }
 
 
@@ -269,6 +320,7 @@ def fetch_and_download_sentinel_images(
     max_cloud_cover: int = 15,
     limit: int = 30,
     days: int = 90,
+    update_progress=None,
 ) -> list[dict]:
     """
     Fetch Sentinel-2 STAC metadata AND download actual PNG images into memory.
@@ -281,7 +333,11 @@ def fetch_and_download_sentinel_images(
         return []
 
     downloaded = []
-    for item in items:
+    total = len(items)
+    for idx, item in enumerate(items, 1):
+        if update_progress:
+            update_progress(f"Downloading Sentinel-2 imagery {idx}/{total}...")
+            
         cloud_pct = item["cloud_cover_pct"]
 
         # Download true color

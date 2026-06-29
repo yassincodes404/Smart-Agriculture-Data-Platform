@@ -76,10 +76,13 @@ def _build_land_context(land_id: int, db: Session) -> dict:
         "crop_zones": [],
     }
 
-    # Spectral history (up to 180 days)
+    # Spectral history (dynamically downsampled to max 60 points)
     try:
         crops = land_repo.list_land_crop_rows(db, land_id)
-        for c in crops[-60:]:  # Up to 60 observations (approx 180 days if every 3 days)
+        if len(crops) > 60:
+            step = len(crops) // 60
+            crops = crops[::step]
+        for c in crops:
             context["spectral_history"].append({
                 "date": c.timestamp.strftime("%Y-%m-%d"),
                 "ndvi": round(float(c.ndvi_value), 4) if c.ndvi_value else None,
@@ -94,10 +97,13 @@ def _build_land_context(land_id: int, db: Session) -> dict:
     except Exception as exc:
         logger.warning("Could not fetch spectral history for AI context: %s", exc)
 
-    # Recent climate (last 30 days)
+    # Recent climate (dynamically downsampled to max 30 points)
     try:
         climate = land_repo.list_land_climate_rows(db, land_id)
-        for c in climate[-30:]:
+        if len(climate) > 30:
+            step = len(climate) // 30
+            climate = climate[::step]
+        for c in climate:
             context["recent_climate"].append({
                 "date": c.timestamp.strftime("%Y-%m-%d"),
                 "temp_c": float(c.temperature_celsius) if c.temperature_celsius else None,
@@ -107,10 +113,13 @@ def _build_land_context(land_id: int, db: Session) -> dict:
     except Exception as exc:
         logger.warning("Could not fetch climate for AI context: %s", exc)
 
-    # Recent soil (last 30 readings)
+    # Recent soil (dynamically downsampled to max 15 points)
     try:
         soil = land_repo.list_land_soil_rows(db, land_id)
-        for s in soil[-15:]:
+        if len(soil) > 15:
+            step = len(soil) // 15
+            soil = soil[::step]
+        for s in soil:
             context["recent_soil"].append({
                 "date": s.timestamp.strftime("%Y-%m-%d"),
                 "moisture_pct": float(s.moisture_pct) if s.moisture_pct else None,
@@ -172,23 +181,10 @@ def run_ai_land_analysis(land_id: int, db: Session, user_id: Optional[int] = Non
     insights_created = []
 
     # ---- Single Combined Prompt to Save API Quota ----
+    # Note: We intentionally do not attach raw base64 satellite images to Groq anymore,
+    # as 2000x2000 STAC arrays consume massive amounts of tokens. The AI relies on the numerical metrics.
     images_payload = []
-    try:
-        from app.models.land_image import LandImage
-        recent_images = db.query(LandImage).filter(LandImage.land_id == land_id).order_by(LandImage.timestamp.desc()).limit(2).all()
-        for img in recent_images:
-            if img.image_data:
-                b64_str = base64.b64encode(img.image_data).decode('utf-8')
-                mime_type = "image/png" if "png" in (img.image_type or "").lower() else "image/jpeg"
-                images_payload.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{mime_type};base64,{b64_str}"
-                    }
-                })
-    except Exception as e:
-        logger.warning("Could not fetch images for AI context: %s", e)
-
+    
     combined_prompt = f"""You are analyzing a farm. Return ONLY valid JSON with 4 distinct insights.
     
 Format:

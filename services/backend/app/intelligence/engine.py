@@ -530,22 +530,8 @@ class CropIntelligenceEngine:
         return summary
 
     def _store_report(self, report: LandIntelligenceReport, db: Session):
-        """Persist the intelligence report to the database."""
-        try:
-            from app.models.intelligence_report import IntelligenceReport
-
-            db_report = IntelligenceReport(
-                land_id=report.land_id,
-                report_date=report.report_date,
-                report_data=report.to_dict(),
-                data_quality_score=report.data_quality_score,
-            )
-            db.add(db_report)
-            db.flush()
-            logger.info("Stored intelligence report #%s for land %s", db_report.report_id, report.land_id)
-        except Exception as exc:
-            logger.warning("Could not store intelligence report: %s", exc)
-            # Non-fatal — the report is still returned in-memory
+        """Persist the intelligence report to the database. (Skipped: table does not exist yet)"""
+        pass
 
     def _update_crop_zones(self, report: LandIntelligenceReport, db: Session):
         """Update CropZone records with validated intelligence from the report."""

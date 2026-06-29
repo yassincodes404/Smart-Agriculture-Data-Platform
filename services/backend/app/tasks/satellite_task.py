@@ -42,9 +42,10 @@ def run_ndvi_history_backfill(
     land_id: int,
     db: Session,
     days: int = 90,
+    update_progress=None,
 ) -> int:
     """
-    Simulates Sentinel-2 array extraction over `days`.
+    Fetches real Sentinel-2 L2A STAC data over `days`.
     Computes all vegetation indices for every tile.
     Takes the median across the field (ignoring spatial variation for the time-series chart)
     and stores them in land_crops.
@@ -53,8 +54,21 @@ def run_ndvi_history_backfill(
     if land is None:
         return 0
 
-    timeseries_data = sentinel.fetch_sentinel_timeseries(land_id, days=days)
+    lat, lon = float(land.latitude), float(land.longitude)
+    
+    from app.lands.geometry import compute_bounding_box
+    if land.boundary_polygon and "coordinates" in land.boundary_polygon:
+        ring = land.boundary_polygon["coordinates"][0]
+        bbox = compute_bounding_box(ring)
+    else:
+        from app.connectors.sentinel import compute_bbox_from_area
+        bbox = compute_bbox_from_area(lat, lon, float(land.area_hectares) if land.area_hectares else 10.0)
+
+    timeseries_data = sentinel.fetch_sentinel_timeseries(bbox=bbox, days=days, update_progress=update_progress)
     dates = timeseries_data["dates"]
+    
+    if not dates:
+        return 0
     
     b02 = timeseries_data["B02"]
     b03 = timeseries_data["B03"]

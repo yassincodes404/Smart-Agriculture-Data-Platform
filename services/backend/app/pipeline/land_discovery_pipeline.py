@@ -32,6 +32,13 @@ def execute(land_id: int, db: Session) -> None:
       Step 3 — Mark land active
     """
     try:
+        def update_progress(msg: str):
+            from app.models.land import Land
+            l = db.get(Land, land_id)
+            if l:
+                l.status = msg
+                db.commit()
+                
         land = repository.get_land(db, land_id)
         if land is None:
             logger.warning("discovery skipped: land_id=%s not found", land_id)
@@ -44,6 +51,7 @@ def execute(land_id: int, db: Session) -> None:
         # Step 1 & 2: Historical Climate, Soil Moisture, and ET0 Backfill (90 days)
         # ------------------------------------------------------------------
         try:
+            update_progress("Step 1/6: Fetching historical climate & soil moisture...")
             records = open_meteo.fetch_historical_climate(lat, lon, days=90)
             if records:
                 ds = repository.get_or_create_data_source(db, "Open-Meteo")
@@ -103,39 +111,37 @@ def execute(land_id: int, db: Session) -> None:
             logger.exception("historical climate connector failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
-        # Step 3: NDVI history backfill (last 90 days from MODIS MOD13Q1)
+        # Step 3: High-Res Satellite Visuals (Sentinel-2)
         # ------------------------------------------------------------------
         try:
-            from app.tasks.satellite_task import run_ndvi_history_backfill
-            inserted = run_ndvi_history_backfill(land_id, db, days=90)
-            logger.info("NDVI backfill complete land_id=%s  records=%d", land_id, inserted)
+            update_progress("Step 2/6: Downloading visual Sentinel-2 thumbnails...")
+            from app.tasks.sentinel_task import run_sentinel_visual_fetch
+            run_sentinel_visual_fetch(land_id, db, update_progress=update_progress)
         except Exception:
-            logger.exception("NDVI backfill failed land_id=%s (continuing)", land_id)
+            logger.exception("Sentinel visual task failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
-        # Step 4: Static soil profile (ISRIC SoilGrids v2)
+        # Step 4: NDVI history backfill (last 90 days from Planetary Computer)
+        # ------------------------------------------------------------------
+        # (Removed because run_crop_detection_task now handles time-series backfill directly per zone)
+
+        # ------------------------------------------------------------------
+        # Step 5: Static soil profile (ISRIC SoilGrids v2)
         # ------------------------------------------------------------------
         try:
+            update_progress("Step 4/6: Fetching soil profile from ISRIC SoilGrids...")
             from app.tasks.soil_task import run_soil_profile_task
             run_soil_profile_task(land_id, db)
         except Exception:
             logger.exception("soil profile task failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
-        # Step 5: High-Res Satellite Visuals (Sentinel-2)
-        # ------------------------------------------------------------------
-        try:
-            from app.tasks.sentinel_task import run_sentinel_visual_fetch
-            run_sentinel_visual_fetch(land_id, db)
-        except Exception:
-            logger.exception("Sentinel visual task failed land_id=%s (continuing)", land_id)
-
-        # ------------------------------------------------------------------
         # Step 6: Crop Detection & Intelligence (AI-based)
         # ------------------------------------------------------------------
         try:
+            update_progress("Step 5/6: Running ML multi-crop detection...")
             from app.tasks.crop_task import run_crop_detection_task
-            run_crop_detection_task(land_id, db)
+            run_crop_detection_task(land_id, db, days=365)
         except Exception:
             logger.exception("Crop detection task failed land_id=%s (continuing)", land_id)
 
@@ -143,6 +149,7 @@ def execute(land_id: int, db: Session) -> None:
         # Step 7: AI Land Analysis (Groq — runs if user has API keys)
         # ------------------------------------------------------------------
         try:
+            update_progress("Step 6/6: Generating AI insights via Groq Vision...")
             from app.ai.land_analyst import run_ai_land_analysis
             run_ai_land_analysis(land_id, db, user_id=land.user_id)
         except Exception:
@@ -151,7 +158,7 @@ def execute(land_id: int, db: Session) -> None:
         # ------------------------------------------------------------------
         # Step 8: Mark land active
         # ------------------------------------------------------------------
-        repository.update_land_status(db, land_id, "active")
+        update_progress("active")
         db.commit()
         logger.info("land discovery completed land_id=%s", land_id)
 

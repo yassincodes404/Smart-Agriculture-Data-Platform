@@ -199,6 +199,14 @@ export async function reanalyzeLand(landId) {
 }
 
 /**
+ * DELETE /api/v1/lands/{landId}
+ * Deletes a land and all associated data.
+ */
+export async function deleteLand(landId) {
+  return request(`/lands/${landId}`, { method: "DELETE" });
+}
+
+/**
  * PATCH /api/v1/lands/{landId}/settings
  * Update per-land settings (e.g. monitoring_interval_days).
  */

@@ -25,6 +25,7 @@ import {
   updateLandSettings,
   getAiInsights,
   triggerAiAnalysis,
+  deleteLand,
 } from "../../services/api";
 import MapViewComponent from "../../components/map/MapViewComponent";
 import AIChatPanel from "../../components/ai/AIChatPanel";
@@ -48,73 +49,130 @@ export default function LandDetailsPage() {
   const [activeLayer, setActiveLayer] = useState("true_color");
   const [cropZones, setCropZones] = useState([]);
   const [reanalyzing, setReanalyzing] = useState(false);
+  const [showProgressModal, setShowProgressModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [intervalDays, setIntervalDays] = useState(16);
   const [showAllSoil, setShowAllSoil] = useState(false);
   const [showAllClimate, setShowAllClimate] = useState(false);
   const [showAllWater, setShowAllWater] = useState(false);
   const [aiInsights, setAiInsights] = useState([]);
+  
+  // Chat Sidebar Adaptivity
+  const [chatState, setChatState] = useState({ isOpen: false, width: 420 });
 
   useEffect(() => {
-    async function fetchAll() {
-      setLoading(true);
-      setError(null);
-      try {
-        // Fetch all data in parallel
-        const [landRes, climateRes, cropsRes, soilRes, waterRes, imagesRes, zonesRes] =
-          await Promise.all([
-            getLandDetail(id),
-            getLandTimeseries(id, "climate").catch(() => ({ points: [] })),
-            getLandTimeseries(id, "crops").catch(() => ({ points: [] })),
-            getLandTimeseries(id, "soil").catch(() => ({ points: [] })),
-            getLandTimeseries(id, "water").catch(() => ({ points: [] })),
-            getLandImages(id).catch(() => ({ images: [] })),
-            getCropZones(id).catch(() => ({ zones: [] })),
-          ]);
-
-        setLand(landRes);
-        setClimate(climateRes.points || []);
-        setCrops(cropsRes.points || []);
-        setSoil(soilRes.points || []);
-        setWater(waterRes.points || []);
-        setImages(imagesRes.images || []);
-        setCropZones(zonesRes.zones || []);
-
-        // Fetch crop intelligence (non-blocking)
-        getCropHealth(id)
-          .then((r) => setCropHealth(r))
-          .catch(() => { });
-        getHarvestPrediction(id)
-          .then((r) => setHarvest(r))
-          .catch(() => { });
-        // Fetch AI insights (non-blocking)
-        getAiInsights(id)
-          .then((r) => setAiInsights(r.insights || []))
-          .catch(() => { });
-      } catch (err) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
+    const appShellMain = document.querySelector('.app-shell__main');
+    if (appShellMain) {
+      appShellMain.style.paddingRight = chatState.isOpen ? `${chatState.width}px` : "0";
+      appShellMain.style.transition = "padding-right 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)";
     }
+    return () => {
+      if (appShellMain) appShellMain.style.paddingRight = "0";
+    };
+  }, [chatState.isOpen, chatState.width]);
+
+  useEffect(() => {
     fetchAll();
   }, [id]);
+
+  async function fetchAll() {
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch ALL data in parallel to avoid "pop-in" UI issues
+      const [
+        landRes, climateRes, cropsRes, soilRes, 
+        waterRes, imagesRes, zonesRes, healthRes, 
+        harvestRes, aiRes
+      ] = await Promise.all([
+        getLandDetail(id),
+        getLandTimeseries(id, "climate").catch(() => ({ points: [] })),
+        getLandTimeseries(id, "crops").catch(() => ({ points: [] })),
+        getLandTimeseries(id, "soil").catch(() => ({ points: [] })),
+        getLandTimeseries(id, "water").catch(() => ({ points: [] })),
+        getLandImages(id).catch(() => ({ images: [] })),
+        getCropZones(id).catch(() => ({ zones: [] })),
+        getCropHealth(id).catch(() => null),
+        getHarvestPrediction(id).catch(() => null),
+        getAiInsights(id).catch(() => ({ insights: [] })),
+      ]);
+
+      setLand(landRes);
+      setClimate(climateRes.points || []);
+      setCrops(cropsRes.points || []);
+      setSoil(soilRes.points || []);
+      setWater(waterRes.points || []);
+      setImages(imagesRes.images || []);
+      setCropZones(zonesRes.zones || []);
+      setCropHealth(healthRes);
+      setHarvest(harvestRes);
+      setAiInsights(aiRes.insights || []);
+      
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Polling effect: if land is not active/ready, poll every 2 seconds
+  useEffect(() => {
+    let interval;
+    if (land && land.status !== "active" && land.status !== "ready") {
+      setReanalyzing(true);
+      interval = setInterval(async () => {
+        try {
+          const updatedLand = await getLandDetail(id);
+          setLand(updatedLand);
+          
+          if (updatedLand.status === "active" || updatedLand.status === "ready") {
+            clearInterval(interval);
+            fetchAll();
+            setShowProgressModal(false);
+          }
+        } catch (e) {
+          console.error("Polling error:", e);
+        }
+      }, 2000);
+    } else {
+      setReanalyzing(false);
+      setShowProgressModal(false);
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [land?.status, id]);
 
   const layers = [
     { key: "true_color", label: "True Color" },
     { key: "ndvi", label: "NDVI" },
   ];
 
-  /* ---------- Re-Analyze handler ---------- */
   const handleReanalyze = async () => {
     try {
       setReanalyzing(true);
+      setShowProgressModal(true);
       await reanalyzeLand(id);
-      // Wait for backend to process, then reload data
-      setTimeout(() => window.location.reload(), 4000);
+      
+      // We manually update local land status to trigger the polling useEffect
+      setLand(prev => prev ? { ...prev, status: "processing" } : prev);
+      
     } catch (err) {
       setError("Re-analysis failed: " + err.message);
       setReanalyzing(false);
+      setShowProgressModal(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (window.confirm("Are you sure you want to delete this land? This action cannot be undone and will delete all associated data.")) {
+      try {
+        await deleteLand(id);
+        navigate("/lands");
+      } catch (err) {
+        alert("Failed to delete land: " + err.message);
+      }
     }
   };
 
@@ -150,11 +208,13 @@ export default function LandDetailsPage() {
     ? primaryZone.crop_type
     : (crops.length > 0 ? crops[crops.length - 1].payload?.crop_type : null);
 
-  const primaryCrops = crops.filter(c => c.payload?.crop_type === primaryCropType);
-  if (primaryCrops.length === 0 && crops.length > 0) primaryCrops.push(...crops); // fallback
-
-  // NDVI bar chart from primary crop only
-  const ndviBars = primaryCrops.map((c) => Math.round((c.value || 0) * 100));
+  // Group crops by crop_type for multi-crop support
+  const cropsByType = crops.reduce((acc, c) => {
+    const t = c.payload?.crop_type || "Unknown";
+    if (!acc[t]) acc[t] = [];
+    acc[t].push(c);
+    return acc;
+  }, {});
 
   const avgSoilMoisture = soil.length > 0 
     ? (soil.reduce((acc, s) => acc + (s.value || 0), 0) / soil.length).toFixed(1)
@@ -251,6 +311,9 @@ export default function LandDetailsPage() {
             )}
           </div>
           <div className="land-detail__header-actions">
+            <button className="btn btn--danger btn--sm" onClick={handleDelete} style={{ background: "var(--error)", color: "white", border: "none" }}>
+              Delete Land
+            </button>
             <button className="btn btn--ghost btn--sm" onClick={() => setShowSettings(true)}>
               ⚙ Settings
             </button>
@@ -286,6 +349,86 @@ export default function LandDetailsPage() {
                 <button className="btn btn--ghost" onClick={() => setShowSettings(false)}>Cancel</button>
                 <button className="btn btn--primary" onClick={handleSaveSettings}>Save</button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* --- Background Processing Banner --- */}
+        {reanalyzing && !showProgressModal && (
+          <div className="alert alert--info anim-fade-in" style={{ marginBottom: "var(--space-md)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }} onClick={() => setShowProgressModal(true)}>
+            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+              <div className="spinner spinner--sm" />
+              <span><strong>Background Task Running:</strong> {land.status}</span>
+            </div>
+            <button className="btn btn--sm btn--primary">View Progress</button>
+          </div>
+        )}
+
+        {/* --- Re-Analysis Progress Modal --- */}
+        {showProgressModal && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div className="card" style={{ width: 520, padding: "var(--space-2xl)", textAlign: "center", position: "relative", overflow: "hidden", boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }}>
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowProgressModal(false)}
+                style={{ position: "absolute", top: 12, right: 12, background: "transparent", border: "none", cursor: "pointer", padding: 8, color: "var(--gray-500)", display: "flex", alignItems: "center", gap: 4 }}
+              >
+                <span className="text-caption">Run in background</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              {/* Animated top bar */}
+              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: "var(--gray-100)" }}>
+                <div style={{ 
+                  height: "100%", 
+                  background: "linear-gradient(90deg, var(--primary-light), var(--primary))", 
+                  width: "50%",
+                  transition: "width 0.3s ease",
+                  transform: "translateX(50%)",
+                  animation: "slide-indeterminate 1.5s infinite ease-in-out alternate" 
+                }} />
+              </div>
+              
+              <div style={{ width: 80, height: 80, background: "var(--primary-light)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto var(--space-lg)" }}>
+                <div className="spinner spinner--lg spinner--dark" style={{ borderTopColor: "var(--primary)" }}></div>
+              </div>
+
+              <h2 className="text-h2" style={{ marginBottom: "var(--space-sm)" }}>
+                Extracting Geospatial Data...
+              </h2>
+              <p className="text-body-sm" style={{ marginBottom: "var(--space-xl)", color: "var(--gray-600)", padding: "0 var(--space-md)" }}>
+                Connecting to Microsoft Planetary Computer to fetch real Sentinel-2 L2A STAC datasets for this coordinate. This may take 30-60 seconds due to raster file size.
+              </p>
+
+              <div style={{ background: "var(--gray-50)", padding: "var(--space-lg)", borderRadius: "var(--radius-md)", textAlign: "left", border: "1px solid var(--gray-200)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16, color: "var(--primary)" }}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  <span className="text-body-sm" style={{ fontWeight: 600, color: "var(--gray-700)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Live Task Progress</span>
+                </div>
+                <div style={{ fontSize: 16, color: "var(--primary)", fontWeight: 600, display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                  {land.status !== 'processing' ? land.status : 'Initializing STAC search...'}
+                  <span style={{ display: "inline-flex", gap: 2 }}>
+                    <span style={{ animation: "pulse 1s infinite alternate" }}>.</span>
+                    <span style={{ animation: "pulse 1s infinite alternate 0.2s" }}>.</span>
+                    <span style={{ animation: "pulse 1s infinite alternate 0.4s" }}>.</span>
+                  </span>
+                </div>
+              </div>
+              
+              <style>{`
+                @keyframes slide-indeterminate {
+                  0% { transform: translateX(-100%); width: 30%; }
+                  100% { transform: translateX(300%); width: 80%; }
+                }
+                @keyframes pulse {
+                  0% { opacity: 0.2; }
+                  100% { opacity: 1; }
+                }
+              `}</style>
             </div>
           </div>
         )}
@@ -447,52 +590,57 @@ export default function LandDetailsPage() {
           </div>
         </div>
 
-        {/* --- NDVI Progression Chart --- */}
-        <div className="anim-stagger" style={{ "--stagger-index": 2 }}>
-          <div className="section-header">
-            <h2 className="section-header__title">
-              NDVI Vegetation Index{primaryCropType ? ` — ${primaryCropType.split("(")[0].trim()}` : ""}
-            </h2>
-            <span className="badge badge--info">{primaryCrops.length} observations</span>
-          </div>
-          <div className="mini-chart" style={{ padding: "var(--space-xl)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-sm)" }}>
-              <span className="text-caption">
-                {primaryCrops.length > 0 ? new Date(primaryCrops[0].timestamp).toLocaleDateString() : ""}
-              </span>
-              <span className="text-caption">
-                {primaryCrops.length > 0 ? new Date(primaryCrops[primaryCrops.length - 1].timestamp).toLocaleDateString() : ""}
-              </span>
+        {/* --- NDVI Progression Charts (Multi-Crop) --- */}
+        {Object.entries(cropsByType).map(([cType, cList], index) => {
+          const ndviBars = cList.map((c) => Math.round((c.value || 0) * 100));
+          return (
+            <div className="anim-stagger" style={{ "--stagger-index": 2 + (index * 0.1) }} key={cType}>
+              <div className="section-header">
+                <h2 className="section-header__title">
+                  NDVI Vegetation Index — {cType.split("(")[0].trim()}
+                </h2>
+                <span className="badge badge--info">{cList.length} observations</span>
+              </div>
+              <div className="mini-chart" style={{ padding: "var(--space-xl)", marginBottom: "var(--space-md)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-sm)" }}>
+                  <span className="text-caption">
+                    {cList.length > 0 ? new Date(cList[0].timestamp).toLocaleDateString() : ""}
+                  </span>
+                  <span className="text-caption">
+                    {cList.length > 0 ? new Date(cList[cList.length - 1].timestamp).toLocaleDateString() : ""}
+                  </span>
+                </div>
+                <div className="mini-chart__visual" style={{ height: 160, alignItems: "flex-end" }}>
+                  {ndviBars.map((h, i) => (
+                    <div
+                      key={i}
+                      className="mini-chart__bar"
+                      style={{
+                        height: `${h}%`,
+                        background: `linear-gradient(0deg, ${h > 70 ? "var(--green-200), var(--green-500)" : h > 40 ? "var(--warning-border), var(--amber-500)" : "var(--error-border), var(--error)"})`,
+                        borderRadius: "4px 4px 0 0",
+                        flex: 1,
+                        position: "relative",
+                      }}
+                      title={`NDVI: ${cList[i]?.value?.toFixed(2)} — ${cList[i]?.payload?.growth_stage}`}
+                    />
+                  ))}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: "var(--space-sm)" }}>
+                  {cList.map((c, i) => (
+                    <span
+                      key={i}
+                      className="text-caption"
+                      style={{ flex: 1, textAlign: "center", fontSize: 10, overflow: "hidden" }}
+                    >
+                      {c.payload?.growth_stage?.slice(0, 4) || ""}
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
-            <div className="mini-chart__visual" style={{ height: 160, alignItems: "flex-end" }}>
-              {ndviBars.map((h, i) => (
-                <div
-                  key={i}
-                  className="mini-chart__bar"
-                  style={{
-                    height: `${h}%`,
-                    background: `linear-gradient(0deg, ${h > 70 ? "var(--green-200), var(--green-500)" : h > 40 ? "var(--warning-border), var(--amber-500)" : "var(--error-border), var(--error)"})`,
-                    borderRadius: "4px 4px 0 0",
-                    flex: 1,
-                    position: "relative",
-                  }}
-                  title={`NDVI: ${primaryCrops[i]?.value?.toFixed(2)} — ${primaryCrops[i]?.payload?.growth_stage}`}
-                />
-              ))}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "var(--space-sm)" }}>
-              {primaryCrops.map((c, i) => (
-                <span
-                  key={i}
-                  className="text-caption"
-                  style={{ flex: 1, textAlign: "center", fontSize: 10, overflow: "hidden" }}
-                >
-                  {c.payload?.growth_stage?.slice(0, 4) || ""}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
+          );
+        })}
 
         {/* --- Crop Composition (multi-crop) --- */}
         {cropZones && cropZones.length > 0 && (
@@ -702,23 +850,57 @@ export default function LandDetailsPage() {
             </div>
             <div className="grid-3">
               {visibleSoil.map((s, i) => (
-                <div className="card" key={i}>
-                  <div className="text-overline" style={{ marginBottom: "var(--space-sm)" }}>
-                    {new Date(s.timestamp).toLocaleDateString()}
+                <div className="card" key={i} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div className="text-overline">{new Date(s.timestamp).toLocaleDateString()}</div>
+                    {s.payload?.suitability_score && (
+                      <span className="badge badge--healthy">Suitability: {s.payload.suitability_score}/100</span>
+                    )}
                   </div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text-primary)", marginBottom: "var(--space-xs)" }}>
-                    {s.value}%
+                  
+                  {/* Moisture Bar */}
+                  <div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span className="text-body-sm" style={{ fontWeight: 600 }}>Moisture</span>
+                      <span className="text-caption">{s.value}%</span>
+                    </div>
+                    <div style={{ height: 6, background: "var(--gray-200)", borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ width: `${s.value}%`, height: "100%", background: "var(--info)", transition: "width 1s ease" }} />
+                    </div>
                   </div>
-                  <div className="text-caption">Moisture</div>
+
                   {s.payload && (
-                    <div style={{ marginTop: "var(--space-sm)", display: "flex", flexDirection: "column", gap: 4 }}>
-                      {s.payload.soil_type && <span className="text-body-sm">Type: {s.payload.soil_type}</span>}
-                      {s.payload.ph_level && <span className="text-body-sm">pH: {s.payload.ph_level}</span>}
-                      {s.payload.organic_matter_pct && <span className="text-body-sm">Organic: {s.payload.organic_matter_pct}%</span>}
-                      {s.payload.suitability_score && (
-                        <span className="badge badge--healthy" style={{ marginTop: 4, alignSelf: "flex-start" }}>
-                          Suitability: {s.payload.suitability_score}/100
-                        </span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+                      {/* pH Bar */}
+                      {s.payload.ph_level && (
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span className="text-body-sm" style={{ fontWeight: 600 }}>pH Level</span>
+                            <span className="text-caption">{s.payload.ph_level} / 14</span>
+                          </div>
+                          <div style={{ height: 6, background: "var(--gray-200)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ width: `${(s.payload.ph_level / 14) * 100}%`, height: "100%", background: "linear-gradient(90deg, #ef4444, #22c55e, #3b82f6)" }} />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Organic Matter Bar */}
+                      {s.payload.organic_matter_pct && (
+                        <div>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                            <span className="text-body-sm" style={{ fontWeight: 600 }}>Organic Matter</span>
+                            <span className="text-caption">{s.payload.organic_matter_pct}%</span>
+                          </div>
+                          <div style={{ height: 6, background: "var(--gray-200)", borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ width: `${Math.min(s.payload.organic_matter_pct * 10, 100)}%`, height: "100%", background: "var(--amber-500)" }} />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {s.payload.soil_type && (
+                        <div style={{ marginTop: 4 }}>
+                          <span className="badge badge--neutral">Type: {s.payload.soil_type.replace("_", " ")}</span>
+                        </div>
                       )}
                     </div>
                   )}
@@ -888,27 +1070,25 @@ export default function LandDetailsPage() {
                 <span className="badge badge--neutral">{climate.length} records</span>
               </div>
             </div>
-            <div className="card card--no-hover" style={{ padding: 0, overflow: "hidden" }}>
-              <table className="logs-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Temperature</th>
-                    <th>Humidity</th>
-                    <th>Rainfall</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleClimate.map((c, i) => (
-                    <tr key={i}>
-                      <td>{new Date(c.timestamp).toLocaleDateString()}</td>
-                      <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.value}°C</td>
-                      <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.payload?.humidity_pct ? `${c.payload.humidity_pct}%` : "—"}</td>
-                      <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.payload?.rainfall_mm || 0} mm</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{ display: "flex", gap: "var(--space-md)", overflowX: "auto", paddingBottom: "var(--space-md)", WebkitOverflowScrolling: "touch" }}>
+              {visibleClimate.map((c, i) => {
+                const isRaining = c.payload?.rainfall_mm > 0;
+                const isCloudy = c.payload?.humidity_pct > 75;
+                const weatherIcon = isRaining ? "🌧️" : (isCloudy ? "☁️" : "☀️");
+                return (
+                  <div className="card" key={i} style={{ minWidth: 140, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "var(--space-md)" }}>
+                    <div className="text-caption" style={{ marginBottom: 12 }}>
+                      {new Date(c.timestamp).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                    </div>
+                    <div style={{ fontSize: 32, marginBottom: 8 }}>{weatherIcon}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>{c.value}°C</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 12, width: "100%" }}>
+                      <div className="badge badge--info" style={{ justifyContent: "center" }}>💧 {c.payload?.humidity_pct || 0}%</div>
+                      {isRaining && <div className="badge badge--warning" style={{ justifyContent: "center" }}>☔ {c.payload?.rainfall_mm} mm</div>}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             {climate.length > 6 && (
               <div style={{ marginTop: "var(--space-md)", textAlign: "center" }}>
@@ -982,7 +1162,7 @@ export default function LandDetailsPage() {
       </div>
     </div>
 
-    <AIChatPanel landId={id} />
+    <AIChatPanel landId={id} onResize={setChatState} />
   </React.Fragment>
   );
 }

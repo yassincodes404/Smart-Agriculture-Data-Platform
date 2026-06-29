@@ -10,12 +10,12 @@
   border-radius: var(--radius-lg);
   padding: var(--space-xl);
   box-shadow: var(--shadow-sm);
-  transition: box-shadow var(--transition-base), transform var(--transition-base);
+  transition: box-shadow var(--transition-base), transform var(--transition-bouncy);
 }
 
 .content-card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-xl);
+  transform: translateY(-4px) scale(1.01);
 }
 
 .content-card__icon {
@@ -56,12 +56,12 @@
   padding: var(--space-xl);
   text-align: center;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow var(--transition-base), transform var(--transition-base);
+  transition: box-shadow var(--transition-base), transform var(--transition-bouncy);
 }
 
 .team-card:hover {
-  box-shadow: var(--shadow-lg);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-xl);
+  transform: translateY(-4px) scale(1.02);
 }
 
 .team-card__avatar {
@@ -128,6 +128,12 @@
   font-weight: 700;
   color: #fff;
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+  transition: transform var(--transition-bouncy), box-shadow var(--transition-bouncy);
+}
+
+.profile-avatar:hover {
+  transform: scale(1.05) rotate(3deg);
+  box-shadow: 0 8px 24px rgba(34, 197, 94, 0.4);
 }
 
 .profile-name {
@@ -193,17 +199,18 @@
 }
 
 .logs-table td {
-  padding: var(--space-sm) var(--space-md);
+  padding: 12px var(--space-md);
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
 }
 
 .logs-table tbody tr {
-  transition: background var(--transition-fast);
+  transition: background var(--transition-base), transform var(--transition-fast);
 }
 
 .logs-table tbody tr:hover {
-  background: var(--gray-50);
+  background: var(--green-50);
+  transform: translateX(4px);
 }
 
 .logs-table__status {

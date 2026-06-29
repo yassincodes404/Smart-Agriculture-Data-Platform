@@ -141,6 +141,7 @@ def insert_land_crop_snapshot(
     growth_stage: Optional[str] = None,
     ndvi_trend: Optional[str] = None,
     confidence: Optional[float] = None,
+    zone_id: Optional[int] = None,
     source_id: Optional[int] = None,
 ) -> LandCrop:
     row = LandCrop(
@@ -156,6 +157,7 @@ def insert_land_crop_snapshot(
         growth_stage=growth_stage,
         ndvi_trend=ndvi_trend,
         confidence=Decimal(str(confidence)) if confidence is not None else None,
+        zone_id=zone_id,
         source_id=source_id,
     )
     if timestamp is not None:
@@ -300,12 +302,14 @@ def insert_land_image(
     return row
 
 
+from sqlalchemy.orm import defer
+
 def list_land_images(
     db: Session,
     land_id: int,
     image_type: Optional[str] = None,
 ) -> Sequence[LandImage]:
-    stmt = select(LandImage).where(LandImage.land_id == land_id)
+    stmt = select(LandImage).options(defer(LandImage.image_data)).where(LandImage.land_id == land_id)
     if image_type:
         stmt = stmt.where(LandImage.image_type == image_type)
     stmt = stmt.order_by(LandImage.timestamp.asc())

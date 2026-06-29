@@ -1,0 +1,34 @@
+name: Deploy to Azure VM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.AZURE_VM_HOST }}
+          username: ${{ secrets.AZURE_VM_USERNAME }}
+          key: ${{ secrets.AZURE_VM_SSH_KEY }}
+          script: |
+            # Navigate to the project directory
+            cd /opt/agri-platform
+            
+            # Pull the latest changes from the main branch
+            git pull origin main
+            
+            # Rebuild and restart the Docker containers in detached mode
+            docker-compose down
+            docker-compose up -d --build
+            
+            # Clean up old unused Docker images to save space
+            docker image prune -f

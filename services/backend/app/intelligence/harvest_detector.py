@@ -51,6 +51,8 @@ class HarvestDetector:
         
         profile = self.crop_profiles.get(crop_type.lower(), {})
         drop_threshold = profile.get("harvest_ndvi_drop", 0.25)
+        if drop_threshold <= 0:
+            drop_threshold = 0.25
         
         events = []
         harvest_count = 0
@@ -77,7 +79,12 @@ class HarvestDetector:
                     drop_mag = ndvi_before - ndvi_after
                     
                     # Confidence based on drop magnitude and sustainability
-                    conf = min(1.0, drop_mag / drop_threshold) * 0.9
+                    # Ensure drop_threshold is > 0 before dividing
+                    if drop_threshold > 0:
+                        conf = min(1.0, drop_mag / drop_threshold) * 0.9
+                    else:
+                        conf = 0.5
+                        
                     if i + 2 < len(arr) and arr[i + 2] < arr[i] * 0.6:
                         conf = min(1.0, conf + 0.1)  # Extra confidence if still low
                     

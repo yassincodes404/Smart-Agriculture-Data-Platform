@@ -28,7 +28,7 @@ services:
       - .env.backend
     volumes:
       - ./services/backend/app:/app/app
-      - ./data:/data
+      - ${DATA_DIR:-./data}:/data
     ports:
       - "8000:8000"
     depends_on:
@@ -44,18 +44,11 @@ services:
     command: ["python", "-m", "app.scheduler.runner"]
     volumes:
       - ./services/backend/app:/app/app
-      - ./data:/data
+      - ${DATA_DIR:-./data}:/data
     depends_on:
       mysql:
         condition: service_healthy
     restart: on-failure
-
-  opencv:
-    build: ./services/opencv
-    container_name: agri_cv
-    tty: true
-    volumes:
-      - ./data/images:/images
 
   frontend:
     build: ./services/frontend/web

@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.core import security
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user, get_current_user_optional, get_db
 from app.models.user import User
 from app.users import service as user_service
 from app.users.schemas import (
@@ -106,18 +106,21 @@ def me(current_user: User = Depends(get_current_user)):
 # POST /auth/logout
 # ---------------------------------------------------------------------------
 
+from typing import Optional
+
 @router.post(
     "/logout",
     response_model=APIResponse,
     summary="Logout (client-side token invalidation)",
 )
-def logout(current_user: User = Depends(get_current_user)):
+def logout(current_user: Optional[User] = Depends(get_current_user_optional)):
     """
     Stateless logout — the server acknowledges the request but does not
     maintain a token blacklist. The client is responsible for discarding the
     JWT token after this call.
     """
+    email = current_user.email if current_user else "Unknown"
     return APIResponse(
         status="success",
-        message=f"User {current_user.email} logged out. Discard your token.",
+        message=f"User {email} logged out. Discard your token.",
     )

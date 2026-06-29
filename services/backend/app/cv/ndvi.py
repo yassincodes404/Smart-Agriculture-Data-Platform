@@ -91,11 +91,24 @@ def classify_health(ndvi: float) -> str:
     return "dense_canopy"
 
 
-def health_score(ndvi: float) -> int:
+def health_score(ndvi: float, crop_type: Optional[str] = None, growth_stage: Optional[str] = None) -> int:
     """Convert NDVI to a 0–100 score for dashboard display."""
+    # Fallow or harvested land shouldn't be penalized as 'poor health'.
+    if growth_stage in ("harvested", "harvest_ready", "fallow/bare soil", "bare_soil") or crop_type == "fallow/bare soil":
+        if ndvi < 0.25:
+            return 80  # Good health for intentionally bare land
+            
     # Clamp to [0, 1] range for scoring (negative NDVI = water/bare, score 0)
     normalized = max(0.0, min(1.0, ndvi))
-    return round(normalized * 100)
+    score = round(normalized * 120)
+    
+    if crop_type and crop_type.lower() in _CROP_PROFILES:
+        profile = _CROP_PROFILES[crop_type.lower()]
+        peak = profile.get("ndvi_peak", 0.7)
+        if ndvi >= peak * 0.85:
+            score = max(score, 85)
+            
+    return max(0, min(100, score))
 
 
 # ---------------------------------------------------------------------------

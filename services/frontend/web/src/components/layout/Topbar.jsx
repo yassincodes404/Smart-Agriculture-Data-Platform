@@ -18,7 +18,7 @@ const PAGE_TITLES = {
   "/logs":        "Activity Logs",
 };
 
-export default function Topbar() {
+export default function Topbar({ onToggleSidebar }) {
   const location = useLocation();
 
   /** Resolve page title from pathname */
@@ -36,7 +36,19 @@ export default function Topbar() {
 
   return (
     <header className="topbar" id="app-topbar">
-      <div className="topbar__left">
+      <div className="topbar__left" style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
+        <button 
+          className="topbar__icon-btn" 
+          onClick={onToggleSidebar}
+          aria-label="Toggle Sidebar"
+          style={{ marginRight: 8 }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 22, height: 22 }}>
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
         <h1 className="topbar__page-title">{getTitle()}</h1>
       </div>
 

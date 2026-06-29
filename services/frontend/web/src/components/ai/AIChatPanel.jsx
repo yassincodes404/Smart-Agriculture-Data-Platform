@@ -16,13 +16,24 @@ import {
   clearAiChatHistory,
 } from "../../services/api";
 
-export default function AIChatPanel({ landId }) {
+export default function AIChatPanel({ landId, onResize }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Resizable Sidebar States
+  const [sidebarWidth, setSidebarWidth] = useState(420);
+  const [isDragging, setIsDragging] = useState(false);
+  
+  useEffect(() => {
+    if (onResize) {
+      onResize({ isOpen, width: sidebarWidth });
+    }
+  }, [isOpen, sidebarWidth, onResize]);
+
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -117,6 +128,29 @@ export default function AIChatPanel({ landId }) {
       .replace(/\n/g, "<br />");
   };
 
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const handleMouseMove = (e) => {
+      let newWidth = window.innerWidth - e.clientX;
+      if (newWidth < 300) newWidth = 300;
+      if (newWidth > 800) newWidth = 800;
+      setSidebarWidth(newWidth);
+    };
+    const handleMouseUp = () => setIsDragging(false);
+    
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isDragging]);
+
   return (
     <>
       {/* Floating button */}
@@ -155,22 +189,43 @@ export default function AIChatPanel({ landId }) {
             position: "fixed",
             top: 0,
             right: 0,
-            width: 400,
+            width: sidebarWidth,
             height: "100vh",
-            backgroundColor: "#ffffff",
-            borderLeft: "1px solid #e5e7eb",
-            boxShadow: "-12px 0 48px rgba(0,0,0,0.12)",
+            backgroundColor: "rgba(255, 255, 255, 0.8)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            borderLeft: "1px solid rgba(255,255,255,0.4)",
+            boxShadow: "-20px 0 60px rgba(0,0,0,0.1)",
             zIndex: 1001, /* Above floating button and navbar */
             display: "flex",
             flexDirection: "column",
-            animation: "slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+            animation: "slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
+            transition: isDragging ? "none" : "width 0.2s ease-out",
           }}
         >
+          {/* Drag Handle */}
+          <div
+            onMouseDown={handleMouseDown}
+            style={{
+              position: "absolute",
+              left: -4,
+              top: 0,
+              bottom: 0,
+              width: 8,
+              cursor: "ew-resize",
+              zIndex: 1002,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <div style={{ width: 4, height: 40, background: "rgba(0,0,0,0.2)", borderRadius: 2 }} />
+          </div>
           {/* Header */}
           <div
             style={{
-              padding: "var(--space-md) var(--space-lg)",
-              background: "linear-gradient(135deg, #f97316, #ea580c)",
+              padding: "20px 24px",
+              background: "linear-gradient(135deg, var(--green-700), var(--green-950))",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -275,17 +330,17 @@ export default function AIChatPanel({ landId }) {
                     padding: "var(--space-sm) var(--space-md)",
                     borderRadius:
                       msg.role === "user"
-                        ? "var(--radius-lg) var(--radius-lg) var(--radius-xs) var(--radius-lg)"
-                        : "var(--radius-xs) var(--radius-lg) var(--radius-lg) var(--radius-lg)",
+                        ? "20px 20px 4px 20px"
+                        : "4px 20px 20px 20px",
                     background:
                       msg.role === "user"
-                        ? "linear-gradient(135deg, #f97316, #ea580c)"
-                        : "#fff7ed",
+                        ? "linear-gradient(135deg, var(--green-500), var(--green-600))"
+                        : "rgba(255,255,255,0.9)",
                     color: msg.role === "user" ? "#fff" : "var(--text-primary)",
-                    fontSize: 13,
+                    fontSize: 14,
                     lineHeight: 1.5,
-                    border: msg.role === "assistant" ? "1px solid #ffedd5" : "none",
-                    boxShadow: msg.role === "assistant" ? "0 2px 8px rgba(0,0,0,0.05)" : "none",
+                    border: msg.role === "assistant" ? "1px solid rgba(0,0,0,0.05)" : "none",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
                   }}
                   dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
                 />
@@ -298,10 +353,10 @@ export default function AIChatPanel({ landId }) {
                 <div
                   style={{
                     padding: "var(--space-sm) var(--space-md)",
-                    borderRadius: "var(--radius-xs) var(--radius-lg) var(--radius-lg) var(--radius-lg)",
-                    background: "#fff7ed",
-                    border: "1px solid #ffedd5",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                    borderRadius: "4px 20px 20px 20px",
+                    background: "rgba(255,255,255,0.9)",
+                    border: "1px solid rgba(0,0,0,0.05)",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
                     display: "flex",
                     gap: 4,
                     alignItems: "center",
@@ -314,8 +369,8 @@ export default function AIChatPanel({ landId }) {
                         width: 6,
                         height: 6,
                         borderRadius: "50%",
-                        background: "#f97316",
-                        animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+                        background: "var(--green-500)",
+                        animation: `bounce 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 0.2}s infinite`,
                       }}
                     />
                   ))}

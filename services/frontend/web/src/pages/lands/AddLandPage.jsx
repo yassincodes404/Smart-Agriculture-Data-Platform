@@ -247,17 +247,58 @@ export default function AddLandPage() {
 
             {/* Processing state */}
             {phase === "analyzing" && (
-              <div className="card anim-fade-in" style={{ marginTop: "var(--space-md)", borderColor: "var(--green-200)", background: "var(--green-50)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-                  <div className="spinner spinner--dark" />
-                  <div>
-                    <div className="text-body-sm" style={{ fontWeight: 600, color: "var(--green-700)" }}>
-                      Analyzing your land...
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div className="card anim-fade-in" style={{ width: 520, padding: "var(--space-2xl)", textAlign: "center", position: "relative", overflow: "hidden", boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }}>
+                  {/* Animated top bar */}
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: "var(--gray-100)" }}>
+                    <div style={{ 
+                      height: "100%", 
+                      background: "linear-gradient(90deg, var(--primary-light), var(--primary))", 
+                      width: "50%",
+                      transition: "width 0.3s ease",
+                      transform: "translateX(50%)",
+                      animation: "slide-indeterminate 1.5s infinite ease-in-out alternate" 
+                    }} />
+                  </div>
+                  
+                  <div style={{ width: 80, height: 80, background: "var(--primary-light)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto var(--space-lg)" }}>
+                    <div className="spinner spinner--lg spinner--dark" style={{ borderTopColor: "var(--primary)" }}></div>
+                  </div>
+
+                  <h2 className="text-h2" style={{ marginBottom: "var(--space-sm)" }}>
+                    Initializing Land Discovery...
+                  </h2>
+                  <p className="text-body-sm" style={{ marginBottom: "var(--space-xl)", color: "var(--gray-600)", padding: "0 var(--space-md)" }}>
+                    Connecting to Microsoft Planetary Computer to fetch real Sentinel-2 L2A STAC datasets for this coordinate. This may take 30-60 seconds due to raster file size.
+                  </p>
+
+                  <div style={{ background: "var(--gray-50)", padding: "var(--space-lg)", borderRadius: "var(--radius-md)", textAlign: "left", border: "1px solid var(--gray-200)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16, color: "var(--primary)" }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      <span className="text-body-sm" style={{ fontWeight: 600, color: "var(--gray-700)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Live Task Progress</span>
                     </div>
-                    <div className="text-caption">
-                      Computing centroid, calculating area, fetching soil &amp; climate data from satellite sources.
+                    <div style={{ fontSize: 16, color: "var(--primary)", fontWeight: 600, display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                      Initializing STAC search...
+                      <span style={{ display: "inline-flex", gap: 2 }}>
+                        <span style={{ animation: "pulse 1s infinite alternate" }}>.</span>
+                        <span style={{ animation: "pulse 1s infinite alternate 0.2s" }}>.</span>
+                        <span style={{ animation: "pulse 1s infinite alternate 0.4s" }}>.</span>
+                      </span>
                     </div>
                   </div>
+                  
+                  <style>{`
+                    @keyframes slide-indeterminate {
+                      0% { transform: translateX(-100%); width: 30%; }
+                      100% { transform: translateX(300%); width: 80%; }
+                    }
+                    @keyframes pulse {
+                      0% { opacity: 0.2; }
+                      100% { opacity: 1; }
+                    }
+                  `}</style>
                 </div>
               </div>
             )}

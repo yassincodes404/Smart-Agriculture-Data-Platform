@@ -178,7 +178,6 @@ def reanalyze_land(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
 
     from app.tasks.sentinel_task import run_sentinel_visual_fetch
-    from app.tasks.satellite_task import run_ndvi_history_backfill
     from app.tasks.crop_task import run_crop_detection_task
     from app.ai.land_analyst import run_ai_land_analysis
     
@@ -188,7 +187,15 @@ def reanalyze_land(
         from app.db.session import SessionLocal
         local_db = SessionLocal()
         try:
-            run_sentinel_visual_fetch(land_id, local_db)
+            def update_progress(msg: str):
+                from app.models.land import Land
+                l = local_db.get(Land, land_id)
+                if l:
+                    l.status = msg
+                    local_db.commit()
+                    
+            update_progress("Downloading visual Sentinel-2 thumbnails...")
+            run_sentinel_visual_fetch(land_id, local_db, update_progress=update_progress)
             
             # Wipe existing for a clean re-analysis in demo
             from sqlalchemy import text
@@ -196,11 +203,14 @@ def reanalyze_land(
             local_db.commit()
             
             # Run the new tile-level ML pipeline
-            run_ndvi_history_backfill(land_id, local_db, days=90)
-            run_crop_detection_task(land_id, local_db, days=90)
+            update_progress("Fetching real STAC arrays and running ML multi-crop detection...")
+            run_crop_detection_task(land_id, local_db, days=365)
 
             # Generate new AI Insights
+            update_progress("Generating AI insights via Groq Vision...")
             run_ai_land_analysis(land_id, local_db, user_id=uid)
+            
+            update_progress("active")
         finally:
             local_db.close()
 
@@ -252,4 +262,20 @@ def get_ndvi_comparison(
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
     return result
-    return result
+
+@router.delete(
+    "/lands/{land_id}",
+    summary="Delete a land and all associated data",
+    status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_land(
+    land_id: int,
+    db: Session = Depends(get_db),
+):
+    from app.models.land import Land
+    land = db.get(Land, land_id)
+    if not land:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
+    db.delete(land)
+    db.commit()
+    return Response(status_code=204)

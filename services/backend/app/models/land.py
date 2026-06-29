@@ -28,6 +28,6 @@ class Land(Base):
     boundary_polygon = Column(SAJSON().with_variant(JSON, "mysql"), nullable=True)
     area_hectares = Column(Numeric(12, 4), nullable=True)
     description = Column(Text, nullable=True)
-    status = Column(String(32), nullable=False, default="processing")
+    status = Column(String(128), nullable=False, default="processing")
     monitoring_interval_days = Column(Integer, nullable=False, default=16)
     created_at = Column(DateTime, default=_utcnow, nullable=False)

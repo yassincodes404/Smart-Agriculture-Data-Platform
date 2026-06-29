@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS lands (
     boundary_polygon JSON NULL,
     area_hectares DECIMAL(10,4) NULL,
     description TEXT NULL,
-    status VARCHAR(32) NOT NULL DEFAULT 'processing',
+    status VARCHAR(128) NOT NULL DEFAULT 'processing',
     monitoring_interval_days INT DEFAULT 7,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -108,6 +108,11 @@ CREATE TABLE IF NOT EXISTS land_crops (
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     crop_type VARCHAR(100) NULL,
     ndvi_value DECIMAL(10,4) NULL,
+    dvi_value DECIMAL(10,4) NULL,
+    evi_value DECIMAL(10,4) NULL,
+    ndwi_value DECIMAL(10,4) NULL,
+    savi_value DECIMAL(10,4) NULL,
+    gndvi_value DECIMAL(10,4) NULL,
     estimated_yield_tons DECIMAL(14,4) NULL,
     growth_stage VARCHAR(50) NULL,
     ndvi_trend VARCHAR(20) NULL,
@@ -165,6 +170,21 @@ CREATE TABLE IF NOT EXISTS analytics_summaries (
     FOREIGN KEY (source_id) REFERENCES data_sources(source_id),
     INDEX idx_analytics_summaries_land_time (land_id, timestamp)
 );
+
+CREATE TABLE IF NOT EXISTS land_ai_insights (
+    insight_id INT AUTO_INCREMENT PRIMARY KEY,
+    land_id INT NOT NULL,
+    insight_type VARCHAR(64) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    structured_data JSON NULL,
+    confidence FLOAT NULL,
+    model_used VARCHAR(128) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (land_id) REFERENCES lands(land_id) ON DELETE CASCADE,
+    INDEX idx_land_created (land_id, created_at DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 
 CREATE TABLE IF NOT EXISTS land_alerts (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -304,3 +324,39 @@ DELIMITER ;
 -- GRANT ALL PRIVILEGES ON agriculture.* TO 'agri_user'@'%';
 -- GRANT ALL PRIVILEGES ON test_agriculture.* TO 'agri_user'@'%';
 -- FLUSH PRIVILEGES;
+CREATE TABLE IF NOT EXISTS land_soil_profiles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    land_id INT NOT NULL,
+    ph_h2o FLOAT,
+    soc_g_per_kg FLOAT,
+    clay_pct FLOAT,
+    sand_pct FLOAT,
+    silt_pct FLOAT,
+    bulk_density FLOAT,
+    nitrogen_g_per_kg FLOAT,
+    cec_cmol FLOAT,
+    texture_class VARCHAR(50),
+    depth_profile VARCHAR(50),
+    suitability_score INT,
+    fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    source_id INT,
+    FOREIGN KEY (land_id) REFERENCES lands(land_id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS land_soil_profiles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    land_id INT NOT NULL,
+    ph_h2o FLOAT,
+    soc_g_per_kg FLOAT,
+    clay_pct FLOAT,
+    sand_pct FLOAT,
+    silt_pct FLOAT,
+    bulk_density FLOAT,
+    nitrogen_g_per_kg FLOAT,
+    cec_cmol FLOAT,
+    texture_class VARCHAR(50),
+    depth_profile VARCHAR(50),
+    suitability_score INT,
+    fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    source_id INT,
+    FOREIGN KEY (land_id) REFERENCES lands(land_id) ON DELETE CASCADE
+);

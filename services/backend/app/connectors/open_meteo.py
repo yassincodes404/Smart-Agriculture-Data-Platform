@@ -99,7 +99,7 @@ def fetch_soil_and_et0(
           et0_fao_evapotranspiration is only available as a DAILY variable.
           We make two separate API calls and merge the results.
     """
-    end_date = date.today() - timedelta(days=1)      # yesterday (archive lag)
+    end_date = date.today() - timedelta(days=5)      # 5-day archive lag
     start_date = end_date - timedelta(days=days - 1)
     start_str = start_date.isoformat()
     end_str = end_date.isoformat()
@@ -190,7 +190,7 @@ def fetch_historical_climate(
     Soil moisture is fetched hourly (noon reading) in a second call and merged.
     Returns None on error.
     """
-    end_date = date.today() - timedelta(days=1)
+    end_date = date.today() - timedelta(days=5)
     start_date = end_date - timedelta(days=days - 1)
     start_str = start_date.isoformat()
     end_str = end_date.isoformat()

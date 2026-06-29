@@ -50,6 +50,41 @@
   overflow-y: auto;
   overflow-x: hidden;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
+  transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.app-shell--collapsed .sidebar {
+  width: 80px;
+}
+
+.app-shell--collapsed .sidebar__logo-text,
+.app-shell--collapsed .sidebar__section-label,
+.app-shell--collapsed .sidebar__link-text {
+  display: none;
+}
+
+.app-shell--collapsed .sidebar__header {
+  justify-content: center;
+  padding: var(--space-lg) 0;
+}
+
+.app-shell--collapsed .sidebar__link {
+  justify-content: center;
+  padding: var(--space-sm);
+}
+
+.app-shell--collapsed .sidebar__link svg {
+  margin: 0;
+}
+
+.app-shell--collapsed .sidebar__footer {
+  justify-content: center;
+  padding: var(--space-md) 0;
+}
+
+.app-shell--collapsed .sidebar__user-info,
+.app-shell--collapsed .sidebar__logout-btn {
+  display: none;
 }
 
 /* Logo */

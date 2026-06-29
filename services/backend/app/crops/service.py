@@ -124,7 +124,7 @@ def get_crop_health(db: Session, land_id: int) -> Optional[CropHealthResponse]:
     for z in zones:
         ndvi_val = float(z.latest_ndvi) if z.latest_ndvi is not None else 0.0
         health = ndvi_engine.classify_health(ndvi_val)
-        score = ndvi_engine.health_score(ndvi_val)
+        score = ndvi_engine.health_score(ndvi_val, crop_type=z.crop_type, growth_stage=z.latest_growth_stage)
 
         expected_range = None
         is_below = False
@@ -176,7 +176,7 @@ def get_crop_health(db: Session, land_id: int) -> Optional[CropHealthResponse]:
             )
         ndvi_val = float(latest.ndvi_value) if latest.ndvi_value is not None else 0.0
         health = ndvi_engine.classify_health(ndvi_val)
-        score = ndvi_engine.health_score(ndvi_val)
+        score = ndvi_engine.health_score(ndvi_val, crop_type=latest.crop_type, growth_stage=latest.growth_stage)
         return CropHealthResponse(
             land_id=land_id,
             ndvi_current=round(ndvi_val, 4),

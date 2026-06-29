@@ -31,3 +31,11 @@ apscheduler
 pytest
 pytest-asyncio
 pytest-mock
+
+# Geospatial STAC
+pystac-client
+planetary-computer
+odc-stac
+xarray
+rioxarray
+dask

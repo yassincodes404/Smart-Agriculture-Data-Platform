@@ -21,10 +21,30 @@ def run_crop_detection_task(land_id: int, db: Session, days: int = 90) -> None:
     """
     logger.info("Running pixel-level crop detection task for land_id=%s", land_id)
 
-    # 1. Fetch raw Sentinel-2 history (Simulated arrays of shape T, H, W)
-    timeseries_data = sentinel.fetch_sentinel_timeseries(land_id, days=days)
+    # 1. Fetch raw Sentinel-2 history
+    land = repository.get_land(db, land_id)
+    if land is None:
+        return
+        
+    lat, lon = float(land.latitude), float(land.longitude)
+    
+    # Use the precise polygon bounding box instead of a tiny hardcoded square
+    from app.lands.geometry import compute_bounding_box
+    if land.boundary_polygon and "coordinates" in land.boundary_polygon:
+        ring = land.boundary_polygon["coordinates"][0]
+        bbox = compute_bounding_box(ring)
+    else:
+        # Fallback to compute_bbox_from_area
+        from app.connectors.sentinel import compute_bbox_from_area
+        bbox = compute_bbox_from_area(lat, lon, float(land.area_hectares) if land.area_hectares else 10.0)
+
+    timeseries_data = sentinel.fetch_sentinel_timeseries(bbox=bbox, days=days)
     dates = timeseries_data["dates"]
     
+    if not dates:
+        logger.warning("No Sentinel-2 records found for land_id=%s", land_id)
+        return
+        
     b02 = timeseries_data["B02"]
     b03 = timeseries_data["B03"]
     b04 = timeseries_data["B04"]
@@ -44,8 +64,6 @@ def run_crop_detection_task(land_id: int, db: Session, days: int = 90) -> None:
     gndvi_arr = indices.compute_gndvi(b08, b03)
 
     # 3. Extract 10 statistical features per tile for each index
-    # For now, we map these robust tile features to the 8 features expected by our existing ML model.
-    # In a full deployment, the ML model would be trained directly on the 60-feature vector.
     ndvi_features = timeseries.extract_timeseries_features(ndvi_arr, dates)
     evi_features = timeseries.extract_timeseries_features(evi_arr, dates)
     ndwi_features = timeseries.extract_timeseries_features(ndwi_arr, dates)
@@ -53,7 +71,6 @@ def run_crop_detection_task(land_id: int, db: Session, days: int = 90) -> None:
     gndvi_features = timeseries.extract_timeseries_features(gndvi_arr, dates)
 
     # 4. Flatten and Run ML on every single tile
-    # Features: [ndvi_max, ndvi_mean, ndvi_std, peak_month, evi_max, ndwi_max, savi_max, gndvi_max]
     N = H * W
     X_pred = np.zeros((N, 8))
     X_pred[:, 0] = ndvi_features["max"].flatten()
@@ -65,46 +82,82 @@ def run_crop_detection_task(land_id: int, db: Session, days: int = 90) -> None:
     X_pred[:, 6] = savi_features["max"].flatten()
     X_pred[:, 7] = gndvi_features["max"].flatten()
 
-    logger.info("Predicting crops for %d tiles (10x10m resolution)", N)
+    logger.info("Predicting crops for %d tiles (10x10m resolution) using Agronomic Rules", N)
     
+    import json
+    import os
+    
+    profiles_path = os.path.join(os.path.dirname(__file__), "..", "data", "reference", "crop_profiles.json")
+    try:
+        with open(profiles_path, "r") as f:
+            crop_profiles = json.load(f)
+    except Exception as e:
+        logger.error("Failed to load crop profiles: %s", e)
+        crop_profiles = {}
+
     crop_counts = {}
-    from app.ml.crop_classifier import load_model
-    clf = load_model()
+    pixel_crop_classes = np.empty(N, dtype=object)
     
-    # Predict all tiles efficiently
-    probs = clf.predict_proba(X_pred)
-    classes = clf.classes_
-    
-    # Take the top class for each tile
-    top_class_idx = np.argmax(probs, axis=1)
-    top_class_probs = np.max(probs, axis=1)
+    # Pre-process profiles for fast lookup
+    annuals = []
+    perennials = []
+    for crop_name, profile in crop_profiles.items():
+        if crop_name == "fallow/bare soil":
+            continue
+        p = {
+            "name": crop_name,
+            "peak": profile.get("ndvi_peak", 0.7),
+            "months": profile.get("typical_season_months", [])
+        }
+        if profile.get("lifecycle") == "perennial":
+            perennials.append(p)
+        else:
+            annuals.append(p)
 
     for i in range(N):
-        c_idx = top_class_idx[i]
-        c_prob = top_class_probs[i]
+        tile_ndvi_max = X_pred[i, 0]
+        tile_peak_mon = int(X_pred[i, 3])
         
-        if c_prob > 0.4:  # Only count tiles with some confidence
-            crop = classes[c_idx]
-            if crop not in crop_counts:
-                crop_counts[crop] = 0
-            crop_counts[crop] += 1
+        if tile_ndvi_max < 0.25:
+            best_crop = "fallow/bare soil"
+        else:
+            # Find eligible crops (either perennial, or annuals that grow in this month)
+            eligible = perennials + [c for c in annuals if not c["months"] or tile_peak_mon in c["months"]]
+            
+            if not eligible:
+                eligible = perennials + annuals # fallback if month doesn't match
+                
+            # Pick the one with the closest ndvi_peak
+            best_crop = min(eligible, key=lambda c: abs(c["peak"] - tile_ndvi_max))["name"]
+
+        pixel_crop_classes[i] = best_crop
+        if best_crop not in crop_counts:
+            crop_counts[best_crop] = 0
+        crop_counts[best_crop] += 1
 
     if not crop_counts:
         crop_counts["Unknown"] = N
+        pixel_crop_classes[:] = "Unknown"
+
+    pixel_crop_classes_2d = pixel_crop_classes.reshape((H, W))
 
     # 5. Aggregate to Crop Zones
     total_valid_tiles = sum(crop_counts.values())
     
-    # Clear old zones
+    # Clear old zones and crops history
     from app.models.crop_zone import CropZone
+    from app.models.land_crop import LandCrop
     db.query(CropZone).filter(CropZone.land_id == land_id).delete()
+    db.query(LandCrop).filter(LandCrop.land_id == land_id).delete()
     db.flush()
 
-    primary_zone_id = None
-    primary_crop = None
-    
     # Sort crops by count descending
     sorted_crops = sorted(crop_counts.items(), key=lambda x: x[1], reverse=True)
+
+    ds = repository.get_or_create_data_source(db, "Sentinel-2 L2A (Planetary Computer)")
+    source_id = int(ds.source_id)
+
+    inserted_history = 0
 
     for crop_type, count in sorted_crops:
         area_pct = (count / total_valid_tiles) * 100.0
@@ -112,11 +165,29 @@ def run_crop_detection_task(land_id: int, db: Session, days: int = 90) -> None:
         # Only create zones for crops > 5% coverage
         if area_pct < 5.0 and len(sorted_crops) > 1:
             continue
-            
-        if primary_crop is None:
-            primary_crop = crop_type
 
-        latest_ndvi = float(np.nanmedian(ndvi_arr[-1]))
+        # Extract zone-specific median arrays
+        zone_mask = (pixel_crop_classes_2d == crop_type)
+        
+        def masked_median(arr_3d):
+            # arr_3d shape: (T, H, W)
+            # zone_mask shape: (H, W)
+            # return shape: (T,)
+            medians = np.zeros(T)
+            for t in range(T):
+                vals = arr_3d[t][zone_mask]
+                vals = vals[~np.isnan(vals)]
+                medians[t] = float(np.nanmedian(vals)) if len(vals) > 0 else 0.0
+            return medians
+
+        zone_ndvi = masked_median(ndvi_arr)
+        zone_dvi = masked_median(indices.compute_dvi(b08, b04))
+        zone_evi = masked_median(evi_arr)
+        zone_ndwi = masked_median(ndwi_arr)
+        zone_savi = masked_median(savi_arr)
+        zone_gndvi = masked_median(gndvi_arr)
+
+        latest_ndvi = zone_ndvi[-1] if len(zone_ndvi) > 0 else 0.0
         growth_stage = ndvi_engine.estimate_growth_stage(latest_ndvi, dates[-1].month)
 
         zone = CropZone(
@@ -125,21 +196,32 @@ def run_crop_detection_task(land_id: int, db: Session, days: int = 90) -> None:
             area_pct=round(area_pct, 2),
             status="active",
             avg_confidence=0.85, # Simulated high confidence for Sentinel pixels
-            latest_ndvi=latest_ndvi,
+            latest_ndvi=float(latest_ndvi),
             latest_growth_stage=growth_stage
         )
         db.add(zone)
         db.flush()
+        zone_id = int(zone.zone_id)
         
-        if primary_zone_id is None:
-            primary_zone_id = zone.zone_id
-
-    # 6. Update existing land_crops rows with the primary zone_id
-    rows = list(repository.list_land_crop_rows(db, land_id))
-    for r in rows:
-        r.zone_id = primary_zone_id
-        r.crop_type = primary_crop
-        r.confidence = 0.85
+        # Insert time-series history for THIS specific zone
+        for t in range(T):
+            dt = dates[t]
+            repository.insert_land_crop_snapshot(
+                db, land_id,
+                timestamp=dt,
+                ndvi_value=float(zone_ndvi[t]),
+                dvi_value=float(zone_dvi[t]),
+                evi_value=float(zone_evi[t]),
+                ndwi_value=float(zone_ndwi[t]),
+                savi_value=float(zone_savi[t]),
+                gndvi_value=float(zone_gndvi[t]),
+                growth_stage=ndvi_engine.estimate_growth_stage(zone_ndvi[t], dt.month),
+                confidence=0.95,
+                source_id=source_id,
+                zone_id=zone_id, # explicitly link to zone
+                crop_type=crop_type, # explicitly set crop type
+            )
+            inserted_history += 1
 
     db.commit()
-    logger.info("Successfully updated crop intelligence for land_id=%s (primary zone_id=%s)", land_id, primary_zone_id)
+    logger.info("Successfully updated crop intelligence and inserted %d zone-specific timeseries records for land_id=%s", inserted_history, land_id)

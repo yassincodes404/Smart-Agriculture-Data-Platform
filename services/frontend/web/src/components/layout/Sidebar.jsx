@@ -73,12 +73,18 @@ const icons = {
       <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   ),
+  compare: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 21l6-6M9 8l-5 5M4 13v5h5M4 18l6-6" />
+    </svg>
+  ),
 };
 
 const navItems = [
   { section: "MAIN" },
   { to: "/dashboard", icon: "dashboard", label: "Dashboard" },
   { to: "/lands",     icon: "lands",     label: "Lands Explorer" },
+  { to: "/lands/compare", icon: "compare", label: "Compare Lands" },
   { to: "/lands/new", icon: "addLand",   label: "Add New Land" },
 
   { section: "INSIGHTS" },
@@ -140,7 +146,7 @@ export default function Sidebar() {
               }
             >
               <span className="sidebar__link-icon">{icons[item.icon]}</span>
-              <span>{item.label}</span>
+              <span className="sidebar__link-text">{item.label}</span>
             </NavLink>
           );
         })}
