@@ -26,6 +26,9 @@ export default function AddLandPage() {
   /* ── Form state ─────────────────────────────────────────────── */
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [trackingFrequency, setTrackingFrequency] = useState("16 days");
+  const [primaryCrop, setPrimaryCrop] = useState("");
+  const [trackingVariables, setTrackingVariables] = useState(["ndvi", "climate", "soil", "water"]);
   const [geometry, setGeometry] = useState(null);
   const [shapeStats, setShapeStats] = useState(null);
 
@@ -60,11 +63,21 @@ export default function AddLandPage() {
     setPhase("submitting");
 
     try {
+      const selectedVariables = trackingVariables.length > 0
+        ? trackingVariables.join(", ")
+        : "standard monitoring";
+      const metadata = [
+        primaryCrop.trim() ? `Primary crop: ${primaryCrop.trim()}` : null,
+        `Tracking frequency: ${trackingFrequency}`,
+        `Tracking variables: ${selectedVariables}`,
+      ].filter(Boolean).join("\n");
+      const fullDescription = [description.trim(), metadata].filter(Boolean).join("\n\n");
+
       // Phase 1: Submit to backend
       setPhase("analyzing");
       const result = await discoverLand({
         name: name.trim(),
-        description: description.trim() || null,
+        description: fullDescription || null,
         geometry,
       });
 
@@ -87,6 +100,14 @@ export default function AddLandPage() {
     submitting: "Sending to server...",
     analyzing: "Analyzing your land — computing area, fetching soil & climate data...",
     done: "Land registered! Redirecting...",
+  };
+
+  const toggleTrackingVariable = (key) => {
+    setTrackingVariables((current) =>
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+    );
   };
 
   return (
@@ -176,6 +197,67 @@ export default function AddLandPage() {
                   disabled={loading}
                   style={{ height: 110, padding: 14, resize: "vertical" }}
                 />
+              </div>
+            </div>
+
+            <div className="add-land-fields-grid">
+              <div className="input-group">
+                <label htmlFor="primary-crop" className="input-label">
+                  Primary Crop
+                </label>
+                <div className="input-wrapper">
+                  <input
+                    id="primary-crop"
+                    type="text"
+                    className="input-field input-field--no-icon"
+                    placeholder="e.g., Wheat, Cotton, Maize"
+                    value={primaryCrop}
+                    onChange={(e) => setPrimaryCrop(e.target.value)}
+                    disabled={loading}
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label htmlFor="tracking-frequency" className="input-label">
+                  Tracking Frequency
+                </label>
+                <div className="input-wrapper">
+                  <select
+                    id="tracking-frequency"
+                    className="input-field input-field--select input-field--no-icon"
+                    value={trackingFrequency}
+                    onChange={(e) => setTrackingFrequency(e.target.value)}
+                    disabled={loading}
+                  >
+                    <option value="7 days">Every 7 days</option>
+                    <option value="14 days">Every 14 days</option>
+                    <option value="16 days">Every 16 days</option>
+                    <option value="30 days">Every 30 days</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">Tracking Variables</label>
+              <div className="tracking-options">
+                {[
+                  { key: "ndvi", label: "NDVI" },
+                  { key: "climate", label: "Climate" },
+                  { key: "soil", label: "Soil" },
+                  { key: "water", label: "Water" },
+                ].map((item) => (
+                  <label className="tracking-option" key={item.key}>
+                    <input
+                      type="checkbox"
+                      checked={trackingVariables.includes(item.key)}
+                      onChange={() => toggleTrackingVariable(item.key)}
+                      disabled={loading}
+                    />
+                    <span>{item.label}</span>
+                  </label>
+                ))}
               </div>
             </div>
 

@@ -224,6 +224,76 @@
 .logs-table__dot--info    { background: var(--info); }
 
 
+/* --- Compare Lands --- */
+.compare-selectors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+  margin-bottom: var(--space-xl);
+}
+
+.compare-empty {
+  display: grid;
+  gap: var(--space-sm);
+  justify-items: start;
+}
+
+.compare-land-card {
+  display: grid;
+  gap: var(--space-sm);
+  text-align: center;
+  justify-items: center;
+}
+
+.compare-loading,
+.compare-processing-note {
+  margin-top: var(--space-md);
+}
+
+.compare-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+  margin-top: var(--space-xl);
+}
+
+.compare-chart-card {
+  height: 330px;
+  padding: var(--space-lg);
+}
+
+.compare-chart-empty {
+  height: 230px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.form-field {
+  display: grid;
+  gap: var(--space-xs);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-field select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  padding: 0 var(--space-md);
+  font: inherit;
+}
+
+.form-field select:focus {
+  outline: 2px solid var(--green-200);
+  border-color: var(--green-500);
+}
+
+
 /* --- Formula Box --- */
 .formula-box {
   background: var(--gray-900);
@@ -250,6 +320,14 @@
 /* --- Responsive --- */
 @media (max-width: 1024px) {
   .profile-section {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-selectors {
+    grid-template-columns: 1fr;
+  }
+
+  .compare-chart-grid {
     grid-template-columns: 1fr;
   }
 }

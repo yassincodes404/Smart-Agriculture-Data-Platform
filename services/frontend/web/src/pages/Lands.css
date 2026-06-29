@@ -180,6 +180,26 @@
   font-weight: 600;
 }
 
+.timeline-control {
+  background: var(--gray-50);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.timeline-control__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+
+.timeline-control__range {
+  width: 100%;
+  accent-color: var(--green-600);
+}
+
 .satellite-viewer__map {
   height: 400px;
   background:
@@ -329,6 +349,45 @@
   margin-bottom: var(--space-md);
 }
 
+.add-land-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-md);
+}
+
+.tracking-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.tracking-option {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast), color var(--transition-fast);
+}
+
+.tracking-option:hover {
+  border-color: var(--green-400);
+  background: var(--green-50);
+  color: var(--green-700);
+}
+
+.tracking-option input {
+  accent-color: var(--green-600);
+}
+
 .add-land-map {
   height: 360px;
   border: 1.5px dashed var(--border-color);
@@ -379,6 +438,15 @@
 }
 
 @media (max-width: 640px) {
+  .add-land-fields-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .tracking-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .lands-toolbar {
     flex-direction: column;
     align-items: stretch;

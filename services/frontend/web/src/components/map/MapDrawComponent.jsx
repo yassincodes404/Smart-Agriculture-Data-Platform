@@ -104,6 +104,38 @@ function polygonToGeoJSON(latLngs) {
   return { type: "Polygon", coordinates: [coords] };
 }
 
+function regularPolygonLatLngs(center, radiusMeters, sides = 6) {
+  const latLngs = [];
+  for (let i = 0; i < sides; i++) {
+    const angle = -Math.PI / 2 + (i / sides) * 2 * Math.PI;
+    const dx = radiusMeters * Math.cos(angle);
+    const dy = radiusMeters * Math.sin(angle);
+    latLngs.push(
+      L.latLng(
+        center.lat + dy / 111320,
+        center.lng + dx / (111320 * Math.cos((center.lat * Math.PI) / 180))
+      )
+    );
+  }
+  return latLngs;
+}
+
+function squareLatLngs(map, start, current) {
+  const startPoint = map.latLngToLayerPoint(start);
+  const currentPoint = map.latLngToLayerPoint(current);
+  const dx = currentPoint.x - startPoint.x;
+  const dy = currentPoint.y - startPoint.y;
+  const side = Math.max(Math.abs(dx), Math.abs(dy));
+  const signedX = dx < 0 ? -side : side;
+  const signedY = dy < 0 ? -side : side;
+  return [
+    map.layerPointToLatLng(startPoint),
+    map.layerPointToLatLng(L.point(startPoint.x + signedX, startPoint.y)),
+    map.layerPointToLatLng(L.point(startPoint.x + signedX, startPoint.y + signedY)),
+    map.layerPointToLatLng(L.point(startPoint.x, startPoint.y + signedY)),
+  ];
+}
+
 /** Extract geojson + stats from a drawn layer */
 function extractFromLayer(layer, layerType) {
   if (layerType === "circle") {
@@ -142,11 +174,13 @@ export default function MapDrawComponent({ onGeometryChange }) {
   const tileRef = useRef(null);           // Current tile layer
   const callbackRef = useRef(onGeometryChange); // Stable callback ref
   const wrapperRef = useRef(null);        // Outer wrapper for fullscreen
+  const customDrawRef = useRef(null);
 
   const [activeLayer, setActiveLayer] = useState("satellite");
   const [hasShape, setHasShape] = useState(false);
   const [shapeStats, setShapeStats] = useState(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [drawHint, setDrawHint] = useState(null);
 
   // Keep callback ref up to date without re-creating effects
   useEffect(() => {
@@ -159,6 +193,29 @@ export default function MapDrawComponent({ onGeometryChange }) {
     setShapeStats(geojson ? stats : null);
     if (callbackRef.current) callbackRef.current(geojson, stats);
   }, []);
+
+  const stopCustomDraw = useCallback(() => {
+    const cleanup = customDrawRef.current;
+    if (cleanup) cleanup();
+    customDrawRef.current = null;
+    setDrawHint(null);
+    const map = mapObjRef.current;
+    if (map) {
+      map.dragging.enable();
+      map.getContainer().style.cursor = "";
+    }
+  }, []);
+
+  const replaceShape = useCallback((layer, layerType = "polygon") => {
+    if (!drawnItemsRef.current || !mapObjRef.current) return;
+    drawnItemsRef.current.clearLayers();
+    drawnItemsRef.current.addLayer(layer);
+    const { geojson, stats } = extractFromLayer(layer, layerType);
+    emitGeometry(geojson, stats);
+    requestAnimationFrame(() => {
+      mapObjRef.current?.invalidateSize({ animate: false });
+    });
+  }, [emitGeometry]);
 
   /* ── Initialize Leaflet map (runs once) ─────────────────────── */
   useEffect(() => {
@@ -194,9 +251,7 @@ export default function MapDrawComponent({ onGeometryChange }) {
           showArea: true,
           shapeOptions: DRAW_SHAPE_OPTS,
         },
-        rectangle: {
-          shapeOptions: DRAW_SHAPE_OPTS,
-        },
+        rectangle: false,
         circle: {
           shapeOptions: DRAW_SHAPE_OPTS,
         },
@@ -242,10 +297,11 @@ export default function MapDrawComponent({ onGeometryChange }) {
     setTimeout(() => map.invalidateSize(), 200);
 
     return () => {
+      stopCustomDraw();
       map.remove();
       mapObjRef.current = null;
     };
-  }, [emitGeometry]);
+  }, [emitGeometry, stopCustomDraw]);
 
   /* ── Invalidate map size whenever fullscreen changes ────────── */
   useEffect(() => {
@@ -267,11 +323,108 @@ export default function MapDrawComponent({ onGeometryChange }) {
 
   /* ── Clear drawn shape ──────────────────────────────────────── */
   const clearShape = useCallback(() => {
+    stopCustomDraw();
     if (drawnItemsRef.current) {
       drawnItemsRef.current.clearLayers();
     }
     emitGeometry(null, null);
-  }, [emitGeometry]);
+  }, [emitGeometry, stopCustomDraw]);
+
+  const startSquareDraw = useCallback(() => {
+    const map = mapObjRef.current;
+    if (!map) return;
+
+    stopCustomDraw();
+    setDrawHint("Click and drag to size a square land boundary");
+    map.dragging.disable();
+    const container = map.getContainer();
+    container.style.cursor = "crosshair";
+
+    let startLatLng = null;
+    let previewLayer = null;
+
+    const clearPreview = () => {
+      if (previewLayer) {
+        map.removeLayer(previewLayer);
+        previewLayer = null;
+      }
+    };
+
+    const eventLatLng = (event) => map.mouseEventToLatLng(event);
+
+    const handlePointerDown = (event) => {
+      event.preventDefault();
+      container.setPointerCapture?.(event.pointerId);
+      startLatLng = eventLatLng(event);
+      clearPreview();
+    };
+
+    const handlePointerMove = (event) => {
+      if (!startLatLng) return;
+      event.preventDefault();
+      const points = squareLatLngs(map, startLatLng, eventLatLng(event));
+      if (!previewLayer) {
+        previewLayer = L.polygon(points, DRAW_SHAPE_OPTS).addTo(map);
+      } else {
+        previewLayer.setLatLngs(points);
+      }
+    };
+
+    const handlePointerUp = (event) => {
+      if (!startLatLng) return;
+      event.preventDefault();
+      const points = squareLatLngs(map, startLatLng, eventLatLng(event));
+      const area = computeAreaHectares(points);
+      clearPreview();
+      stopCustomDraw();
+
+      if (area < 0.01) {
+        emitGeometry(null, null);
+        return;
+      }
+
+      replaceShape(L.polygon(points, DRAW_SHAPE_OPTS));
+    };
+
+    customDrawRef.current = () => {
+      clearPreview();
+      container.removeEventListener("pointerdown", handlePointerDown);
+      container.removeEventListener("pointermove", handlePointerMove);
+      container.removeEventListener("pointerup", handlePointerUp);
+      container.removeEventListener("pointercancel", handlePointerUp);
+    };
+
+    container.addEventListener("pointerdown", handlePointerDown);
+    container.addEventListener("pointermove", handlePointerMove);
+    container.addEventListener("pointerup", handlePointerUp);
+    container.addEventListener("pointercancel", handlePointerUp);
+  }, [emitGeometry, replaceShape, stopCustomDraw]);
+
+  const startHexagonDraw = useCallback(() => {
+    const map = mapObjRef.current;
+    if (!map) return;
+
+    stopCustomDraw();
+    setDrawHint("Click the center point to place a six-sided land boundary");
+    const container = map.getContainer();
+    container.style.cursor = "crosshair";
+
+    const handleClick = (event) => {
+      event.preventDefault();
+      const center = map.mouseEventToLatLng(event);
+      const zoom = Math.max(map.getZoom(), 1);
+      const radiusMeters = Math.max(150, Math.min(2500, 20000 / zoom));
+      const points = regularPolygonLatLngs(center, radiusMeters, 6);
+      stopCustomDraw();
+      replaceShape(L.polygon(points, DRAW_SHAPE_OPTS));
+    };
+
+    customDrawRef.current = () => {
+      container.removeEventListener("click", handleClick);
+    };
+
+    container.addEventListener("click", handleClick, { once: true });
+  }, [replaceShape, stopCustomDraw]);
 
   /* ── Toggle fullscreen ──────────────────────────────────────── */
   const toggleFullscreen = useCallback(() => {
@@ -311,6 +464,24 @@ export default function MapDrawComponent({ onGeometryChange }) {
             🗺️ Street
           </button>
         </div>
+        <div className="map-toolbar">
+          <button
+            type="button"
+            className="map-toolbar__btn"
+            onClick={startSquareDraw}
+            title="Click and drag to draw a square"
+          >
+            Square
+          </button>
+          <button
+            type="button"
+            className="map-toolbar__btn"
+            onClick={startHexagonDraw}
+            title="Click once to place a six-sided shape"
+          >
+            Hexagon
+          </button>
+        </div>
         <button
           type="button"
           className="map-toolbar__btn map-fullscreen-btn"
@@ -347,7 +518,7 @@ export default function MapDrawComponent({ onGeometryChange }) {
             <path d="M12 22V10" />
           </svg>
           <div className="map-instructions__text">
-            Use the draw tools to mark your land
+            {drawHint || "Use the draw tools to mark your land"}
           </div>
           <div className="map-instructions__sub">
             Polygon • Rectangle • Circle

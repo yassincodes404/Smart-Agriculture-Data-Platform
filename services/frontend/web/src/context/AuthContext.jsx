@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 /**
  * context/AuthContext.jsx
  * -----------------------
@@ -17,7 +18,7 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => Boolean(getToken()));
   const [error, setError] = useState(null);
 
   // On mount: check if we have a stored token and load user
@@ -31,8 +32,6 @@ export function AuthProvider({ children }) {
           setUser(null);
         })
         .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
     }
   }, []);
 

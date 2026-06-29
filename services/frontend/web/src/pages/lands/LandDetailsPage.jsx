@@ -27,6 +27,8 @@ import {
   triggerAiAnalysis,
 } from "../../services/api";
 import MapViewComponent from "../../components/map/MapViewComponent";
+import NDVIChart from "../../components/charts/NDVIChart";
+import ClimateChart from "../../components/charts/ClimateChart";
 import AIChatPanel from "../../components/ai/AIChatPanel";
 import VegetationChart from "../../components/charts/VegetationChart";
 import "../Lands.css";
@@ -46,6 +48,7 @@ export default function LandDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeLayer, setActiveLayer] = useState("true_color");
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [cropZones, setCropZones] = useState([]);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -105,6 +108,10 @@ export default function LandDetailsPage() {
     { key: "ndvi", label: "NDVI" },
   ];
 
+  useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [activeLayer, images.length]);
+
   /* ---------- Re-Analyze handler ---------- */
   const handleReanalyze = async () => {
     try {
@@ -134,12 +141,16 @@ export default function LandDetailsPage() {
   const latestSoil = soil.length > 0 ? soil[soil.length - 1] : null;
   const latestWater = water.length > 0 ? water[water.length - 1] : null;
 
-  // Filtered images by type
-  const filteredImages = images.filter((img) =>
-    activeLayer === "true_color"
-      ? img.image_type === "true_color"
-      : img.image_type === "ndvi"
-  );
+  // Filtered images by type, ordered for the timeline controls.
+  const filteredImages = images
+    .filter((img) =>
+      activeLayer === "true_color"
+        ? img.image_type === "true_color"
+        : img.image_type === "ndvi"
+    )
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  const safeImageIndex = Math.min(selectedImageIndex, Math.max(filteredImages.length - 1, 0));
+  const selectedImage = filteredImages[safeImageIndex] || null;
 
   // Multi-crop support: use real cropZones from the API
   const primaryZone = cropZones && cropZones.length > 0
@@ -193,6 +204,9 @@ export default function LandDetailsPage() {
           <line x1="9" y1="9" x2="15" y2="15" />
         </svg>
         <div className="error-state__message">{error}</div>
+        <button className="btn btn--secondary" onClick={() => window.location.reload()}>
+          Retry
+        </button>
         <button className="btn btn--primary" onClick={() => navigate("/lands")}>
           Back to Lands
         </button>
@@ -270,9 +284,13 @@ export default function LandDetailsPage() {
           <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={() => setShowSettings(false)}>
             <div className="card" style={{ width: 420, padding: "var(--space-lg)" }} onClick={(e) => e.stopPropagation()}>
               <h2 className="text-h3" style={{ marginBottom: "var(--space-md)" }}>Land Settings</h2>
-              <div className="form-group">
-                <label className="form-label">Data Update Period</label>
-                <select className="form-control" value={intervalDays} onChange={(e) => setIntervalDays(e.target.value)}>
+              <div className="input-group">
+                <label className="input-label">Data Update Period</label>
+                <select
+                  className="input-field input-field--select input-field--no-icon"
+                  value={intervalDays}
+                  onChange={(e) => setIntervalDays(e.target.value)}
+                >
                   <option value="7">Every 7 days (weekly)</option>
                   <option value="14">Every 14 days</option>
                   <option value="16">Every 16 days (Sentinel-2 default)</option>
@@ -455,42 +473,8 @@ export default function LandDetailsPage() {
             </h2>
             <span className="badge badge--info">{primaryCrops.length} observations</span>
           </div>
-          <div className="mini-chart" style={{ padding: "var(--space-xl)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "var(--space-sm)" }}>
-              <span className="text-caption">
-                {primaryCrops.length > 0 ? new Date(primaryCrops[0].timestamp).toLocaleDateString() : ""}
-              </span>
-              <span className="text-caption">
-                {primaryCrops.length > 0 ? new Date(primaryCrops[primaryCrops.length - 1].timestamp).toLocaleDateString() : ""}
-              </span>
-            </div>
-            <div className="mini-chart__visual" style={{ height: 160, alignItems: "flex-end" }}>
-              {ndviBars.map((h, i) => (
-                <div
-                  key={i}
-                  className="mini-chart__bar"
-                  style={{
-                    height: `${h}%`,
-                    background: `linear-gradient(0deg, ${h > 70 ? "var(--green-200), var(--green-500)" : h > 40 ? "var(--warning-border), var(--amber-500)" : "var(--error-border), var(--error)"})`,
-                    borderRadius: "4px 4px 0 0",
-                    flex: 1,
-                    position: "relative",
-                  }}
-                  title={`NDVI: ${primaryCrops[i]?.value?.toFixed(2)} — ${primaryCrops[i]?.payload?.growth_stage}`}
-                />
-              ))}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "var(--space-sm)" }}>
-              {primaryCrops.map((c, i) => (
-                <span
-                  key={i}
-                  className="text-caption"
-                  style={{ flex: 1, textAlign: "center", fontSize: 10, overflow: "hidden" }}
-                >
-                  {c.payload?.growth_stage?.slice(0, 4) || ""}
-                </span>
-              ))}
-            </div>
+          <div className="card card--no-hover" style={{ padding: "var(--space-lg)", height: 250 }}>
+            <NDVIChart data={primaryCrops} />
           </div>
         </div>
 
@@ -617,6 +601,39 @@ export default function LandDetailsPage() {
                 </span>
               </div>
               <div style={{ padding: "var(--space-md)" }}>
+                {selectedImage && (
+                  <div className="timeline-control" style={{ marginBottom: "var(--space-md)" }}>
+                    <div className="timeline-control__header">
+                      <div>
+                        <div className="text-overline">Timeline</div>
+                        <div className="text-body-sm">
+                          {new Date(selectedImage.date).toLocaleDateString()}
+                          {selectedImage.ndvi_mean ? ` - NDVI ${selectedImage.ndvi_mean.toFixed(2)}` : ""}
+                        </div>
+                      </div>
+                      <select
+                        className="input-field input-field--select input-field--no-icon"
+                        value={safeImageIndex}
+                        onChange={(e) => setSelectedImageIndex(Number(e.target.value))}
+                        style={{ width: 180 }}
+                      >
+                        {filteredImages.map((img, index) => (
+                          <option key={img.id || `${img.date}-${index}`} value={index}>
+                            {new Date(img.date).toLocaleDateString()}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max={Math.max(filteredImages.length - 1, 0)}
+                      value={safeImageIndex}
+                      onChange={(e) => setSelectedImageIndex(Number(e.target.value))}
+                      className="timeline-control__range"
+                    />
+                  </div>
+                )}
                 {filteredImages.length === 0 ? (
                   <div className="empty-state" style={{ padding: "var(--space-xl)" }}>
                     <p className="text-body-sm">No {activeLayer.replace("_", " ")} images available.</p>
@@ -685,6 +702,16 @@ export default function LandDetailsPage() {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+          {images.length === 0 && (
+            <div className="satellite-viewer" style={{ marginTop: "var(--space-md)" }}>
+              <div className="empty-state" style={{ padding: "var(--space-xl)" }}>
+                <h3 className="empty-state__title">No satellite captures yet</h3>
+                <p className="empty-state__description">
+                  The map boundary is ready. True Color and NDVI captures will appear here after the backend image pipeline creates viewable image files.
+                </p>
               </div>
             </div>
           )}
@@ -888,27 +915,9 @@ export default function LandDetailsPage() {
                 <span className="badge badge--neutral">{climate.length} records</span>
               </div>
             </div>
-            <div className="card card--no-hover" style={{ padding: 0, overflow: "hidden" }}>
-              <table className="logs-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Temperature</th>
-                    <th>Humidity</th>
-                    <th>Rainfall</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleClimate.map((c, i) => (
-                    <tr key={i}>
-                      <td>{new Date(c.timestamp).toLocaleDateString()}</td>
-                      <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.value}°C</td>
-                      <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.payload?.humidity_pct ? `${c.payload.humidity_pct}%` : "—"}</td>
-                      <td style={{ fontVariantNumeric: "tabular-nums" }}>{c.payload?.rainfall_mm || 0} mm</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+<<<<<<< HEAD
+            <div className="card card--no-hover" style={{ padding: "var(--space-lg)", height: 350 }}>
+              <ClimateChart data={climate} />
             </div>
             {climate.length > 6 && (
               <div style={{ marginTop: "var(--space-md)", textAlign: "center" }}>
