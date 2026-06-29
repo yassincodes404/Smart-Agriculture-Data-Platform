@@ -31,8 +31,10 @@ ENV/
 env.bak/
 venv.bak/
 
-# Environment Variables
-.env.*
+# Environment Variables (keep .env.backend and .env.db for Docker dev setup)
+# .env.* — uncomment to ignore all env variants in production
+!.env.backend
+!.env.db
 
 # Node / JS
 node_modules/

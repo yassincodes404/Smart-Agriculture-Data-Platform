@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { listLands, getLandTimeseries, getCropHealth, getHarvestPrediction, healthCheck } from "../services/api";
+import NDVIChart from "../components/charts/NDVIChart";
 import "./Dashboard.css";
 
 export default function DashboardPage() {
@@ -34,16 +35,17 @@ export default function DashboardPage() {
         const allLands = landsRes.lands || [];
         setLands(allLands);
 
-        // If we have a land, load its crop NDVI data for the chart
+        // Prefer a land that already has an active/ready status for dashboard metrics.
         if (allLands.length > 0) {
-          const firstLandId = allLands[0].land_id;
-          getLandTimeseries(firstLandId, "crops")
+          const preferredLand = allLands.find((land) => land.status === "ready" || land.status === "active") || allLands[0];
+          const preferredLandId = preferredLand.land_id;
+          getLandTimeseries(preferredLandId, "crops")
             .then((r) => setNdviData(r.points || []))
             .catch(() => {});
-          getCropHealth(firstLandId)
+          getCropHealth(preferredLandId)
             .then((r) => setCropHealth(r))
             .catch(() => {});
-          getHarvestPrediction(firstLandId)
+          getHarvestPrediction(preferredLandId)
             .then((r) => setHarvest(r))
             .catch(() => {});
         }
@@ -58,8 +60,8 @@ export default function DashboardPage() {
 
   const totalArea = lands.reduce((sum, l) => sum + (l.area_hectares || 0), 0);
   const readyCount = lands.filter((l) => l.status === "ready" || l.status === "active").length;
+  const processingCount = lands.filter((l) => l.status === "processing").length;
   const latestNDVI = ndviData.length > 0 ? ndviData[ndviData.length - 1]?.value : null;
-  const ndviBars = ndviData.map((c) => Math.round((c.value || 0) * 100));
 
   if (loading) {
     return (
@@ -85,6 +87,13 @@ export default function DashboardPage() {
           Here's the latest intelligence from your {lands.length} registered land{lands.length !== 1 ? "s" : ""}.
         </p>
       </div>
+
+      {processingCount > 0 && (
+        <div className="alert alert--warning" style={{ marginBottom: "var(--space-lg)" }}>
+          {processingCount} land{processingCount !== 1 ? "s are" : " is"} still processing, so some readings may stay empty
+          until the backend analysis finishes.
+        </div>
+      )}
 
       {/* System Status */}
       <div className="anim-stagger" style={{ "--stagger-index": 0 }}>
@@ -133,28 +142,10 @@ export default function DashboardPage() {
             <h2 className="section-header__title">NDVI Vegetation Index</h2>
             <span className="badge badge--info">{ndviData.length} observations</span>
           </div>
-          {ndviBars.length > 0 ? (
-            <>
-              <div className="mini-chart__visual" style={{ height: 140, alignItems: "flex-end" }}>
-                {ndviBars.map((h, i) => (
-                  <div
-                    key={i}
-                    className="mini-chart__bar"
-                    style={{
-                      height: `${h}%`,
-                      background: `linear-gradient(0deg, ${h > 70 ? "var(--green-200), var(--green-500)" : h > 40 ? "var(--warning-border), var(--amber-500)" : "var(--error-border), var(--error)"})`,
-                      borderRadius: "4px 4px 0 0",
-                      flex: 1,
-                    }}
-                    title={`NDVI: ${ndviData[i]?.value?.toFixed(2)} — ${ndviData[i]?.payload?.growth_stage}`}
-                  />
-                ))}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "var(--space-sm)" }}>
-                <span className="text-caption">{ndviData[0]?.payload?.growth_stage?.replace("_", " ")}</span>
-                <span className="text-caption">{ndviData[ndviData.length - 1]?.payload?.growth_stage?.replace("_", " ")}</span>
-              </div>
-            </>
+          {ndviData.length > 0 ? (
+            <div style={{ height: 200, width: "100%", marginTop: "var(--space-md)" }}>
+              <NDVIChart data={ndviData} />
+            </div>
           ) : (
             <div className="empty-state" style={{ padding: "var(--space-xl)" }}>
               <p className="text-body-sm">No NDVI data available yet.</p>

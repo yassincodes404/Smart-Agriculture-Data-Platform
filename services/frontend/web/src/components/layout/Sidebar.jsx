@@ -32,6 +32,14 @@ const icons = {
       <path d="M12 8v8M8 12h8" />
     </svg>
   ),
+  compare: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 3H5a2 2 0 00-2 2v14a2 2 0 002 2h5" />
+      <path d="M14 3h5a2 2 0 012 2v14a2 2 0 01-2 2h-5" />
+      <path d="M12 3v18" />
+      <path d="M7 8h3M7 12h3M14 8h3M14 12h3" />
+    </svg>
+  ),
   methodology: (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2L2 7l10 5 10-5-10-5z" />
@@ -88,6 +96,7 @@ const navItems = [
   { to: "/lands/new", icon: "addLand",   label: "Add New Land" },
 
   { section: "INSIGHTS" },
+  { to: "/lands/compare", icon: "compare", label: "Compare Lands" },
   { to: "/methodology", icon: "methodology", label: "Methodology" },
 
   { section: "GENERAL" },

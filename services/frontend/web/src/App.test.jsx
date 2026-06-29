@@ -1,33 +1,49 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
-import App from './App';
+import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import App from "./App";
 
-// Mock the global fetch API to test successful state updates safely
-global.fetch = vi.fn();
-
-describe('App Component', () => {
-  it('renders the header correctly', () => {
-    render(<App />);
-    expect(screen.getByText('Agricultural Data Platform')).toBeInTheDocument();
+describe("App", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.restoreAllMocks();
   });
 
-  it('updates message state to backend running when test button clicked', async () => {
-    // Setup the mock response to simulate a healthy backend reply
-    fetch.mockResolvedValueOnce({
-      json: async () => ({ status: 'backend running' }),
-    });
+  it("renders the login page for visitors", async () => {
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: /welcome back/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/email address/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
+  });
+
+  it("redirects protected pages back to login when there is no token", async () => {
+    window.history.pushState({}, "", "/dashboard");
 
     render(<App />);
-    
-    // Simulate user interaction
-    const testButton = screen.getByText('Test Backend');
-    fireEvent.click(testButton);
 
-    // Assert that the mocked endpoint was called
-    expect(fetch).toHaveBeenCalledWith('/api/health');
+    expect(await screen.findByRole("heading", { name: /welcome back/i })).toBeInTheDocument();
+  });
 
-    // Assert that the React state correctly displays the mock response on the screen
-    const statusText = await screen.findByText('backend running');
-    expect(statusText).toBeInTheDocument();
+  it("loads the protected app shell when a saved token is valid", async () => {
+    localStorage.setItem("agri_token", "test-token");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: "success",
+        data: {
+          user_id: 1,
+          email: "omar@example.com",
+          role: "viewer",
+          is_active: true,
+        },
+      }),
+    });
+
+    window.history.pushState({}, "", "/dashboard");
+    render(<App />);
+
+    expect(await screen.findByText("AgriData Egypt")).toBeInTheDocument();
+    expect(screen.getAllByText("Dashboard").length).toBeGreaterThan(0);
+    expect(screen.getByText("omar@example.com")).toBeInTheDocument();
   });
 });
