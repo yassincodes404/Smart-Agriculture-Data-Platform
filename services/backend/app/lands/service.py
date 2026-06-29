@@ -74,6 +74,10 @@ def register_land_for_discovery(
     centroid_lat, centroid_lng = compute_centroid(closed_ring)
     area_ha = compute_area_hectares(closed_ring)
 
+    # Validate that this is actually agricultural land
+    from app.lands.validator import validate_agricultural_land
+    validate_agricultural_land(centroid_lat, centroid_lng)
+
     # Build closed GeoJSON geometry for storage
     closed_geojson = {
         "type": "Polygon",
@@ -174,6 +178,16 @@ def land_timeseries(
                 payload["ndvi_trend"] = r.ndvi_trend
             if r.confidence is not None:
                 payload["confidence"] = float(r.confidence)
+            if r.dvi_value is not None:
+                payload["dvi_value"] = float(r.dvi_value)
+            if r.evi_value is not None:
+                payload["evi_value"] = float(r.evi_value)
+            if r.ndwi_value is not None:
+                payload["ndwi_value"] = float(r.ndwi_value)
+            if r.savi_value is not None:
+                payload["savi_value"] = float(r.savi_value)
+            if r.gndvi_value is not None:
+                payload["gndvi_value"] = float(r.gndvi_value)
             points.append(
                 TimeSeriesPoint(
                     timestamp=r.timestamp.isoformat(),
@@ -218,22 +232,13 @@ def list_images(
     rows = repository.list_land_images(db, land_id, image_type=image_type)
     items = []
     for r in rows:
-        # Build image_url: remote URLs pass through, local paths get mapped
-        raw_path = r.image_path or ""
-        if raw_path.startswith("http://") or raw_path.startswith("https://"):
-            image_url = raw_path  # Remote URL — pass through
-        elif raw_path:
-            filename = raw_path.rsplit("/", 1)[-1]
-            image_url = f"/api/v1/static/images/{filename}"
-        else:
-            image_url = None
+        image_url = f"/api/v1/lands/{land_id}/images/{r.id}/content"
 
         items.append(
             LandImageItem(
                 id=int(r.id),
                 date=r.timestamp.strftime("%Y-%m-%d"),
                 image_type=r.image_type,
-                image_path=r.image_path,
                 image_url=image_url,
                 ndvi_mean=float(r.ndvi_mean) if r.ndvi_mean is not None else None,
                 cloud_cover_pct=float(r.cloud_cover_pct) if r.cloud_cover_pct is not None else None,

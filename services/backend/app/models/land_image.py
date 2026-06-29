@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, LargeBinary
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.types import JSON as SAJSON
 
@@ -19,7 +19,7 @@ class LandImage(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     land_id = Column(Integer, ForeignKey("lands.land_id"), nullable=False, index=True)
     timestamp = Column(DateTime, default=_utcnow, nullable=False)
-    image_path = Column(String(500), nullable=False)
+    image_data = Column(LargeBinary(length=(2**24)-1), nullable=False) # MEDIUMBLOB
     image_type = Column(String(100), nullable=False)
     cv_analysis_summary = Column(SAJSON().with_variant(JSON, "mysql"), nullable=True)
     ndvi_mean = Column(Numeric(6, 4), nullable=True)       # Mean NDVI for this image

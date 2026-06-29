@@ -42,10 +42,39 @@ def crop_health(land_id: int, db: Session = Depends(get_db)):
     Compares current NDVI against expected range from crop profiles.
     Returns health status (0–100 score), classification, and farming advice.
     """
-    result = crop_service.get_crop_health(db, land_id)
-    if result is None:
+    from app.intelligence.engine import CropIntelligenceEngine
+    engine = CropIntelligenceEngine()
+    report = engine.analyze_land(land_id, db)
+    
+    if report.land_id == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
-    return result
+        
+    zones_health = []
+    overall_ndvi = 0.0
+    for z in report.zones:
+        # map to ZoneHealthItem
+        zones_health.append({
+            "zone_id": z.zone_id,
+            "crop_type": z.crop_type,
+            "ndvi_current": z.ndvi_current,
+            "health_score": z.health_score,
+            "health_status": "excellent" if z.health_score >= 85 else "good" if z.health_score >= 70 else "fair" if z.health_score >= 50 else "poor",
+            "advice": "Monitor crop conditions"
+        })
+        if z.ndvi_current > overall_ndvi:
+            overall_ndvi = z.ndvi_current
+            
+    overall_status = "excellent" if report.overall_health >= 85 else "good" if report.overall_health >= 70 else "fair" if report.overall_health >= 50 else "poor"
+        
+    return {
+        "land_id": land_id,
+        "ndvi_current": overall_ndvi,
+        "overall_health_score": report.overall_health,
+        "overall_health_status": overall_status,
+        "health_score": report.overall_health,
+        "health_status": overall_status,
+        "zones": zones_health
+    }
 
 
 @router.get(
@@ -95,7 +124,38 @@ def harvest_prediction(land_id: int, db: Session = Depends(get_db)):
     estimate the harvest start/end window.
     Requires at least 3 historical NDVI readings.
     """
-    result = crop_service.get_harvest_prediction(db, land_id)
-    if result is None:
+    from app.intelligence.engine import CropIntelligenceEngine
+    engine = CropIntelligenceEngine()
+    report = engine.analyze_land(land_id, db)
+    
+    if report.land_id == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
-    return result
+        
+    zones_harvest = []
+    overall_days = None
+    overall_start = None
+    for z in report.zones:
+        zones_harvest.append({
+            "zone_id": z.zone_id,
+            "crop_type": z.crop_type,
+            "prediction_available": z.next_harvest_days is not None,
+            "reason_unavailable": None if z.next_harvest_days is not None else "Insufficient data",
+            "estimated_harvest_start": z.next_harvest_est.isoformat() if z.next_harvest_est else None,
+            "estimated_harvest_end": (z.next_harvest_est + __import__('datetime').timedelta(days=7)).isoformat() if z.next_harvest_est else None,
+            "days_to_harvest": z.next_harvest_days,
+            "confidence": z.harvest_confidence,
+            "latest_growth_stage": z.growth_stage
+        })
+        if z.next_harvest_days is not None:
+            if overall_days is None or z.next_harvest_days < overall_days:
+                overall_days = z.next_harvest_days
+                overall_start = z.next_harvest_est
+
+    return {
+        "land_id": land_id,
+        "prediction_available": overall_days is not None,
+        "days_to_harvest": overall_days,
+        "estimated_harvest_start": overall_start.isoformat() if overall_start else None,
+        "estimated_harvest_end": (overall_start + __import__('datetime').timedelta(days=7)).isoformat() if overall_start else None,
+        "zones": zones_harvest
+    }

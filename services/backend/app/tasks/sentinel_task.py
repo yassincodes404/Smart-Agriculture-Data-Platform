@@ -18,14 +18,14 @@ from app.lands import geometry, repository
 logger = logging.getLogger(__name__)
 
 
-def run_sentinel_visual_fetch(land_id: int, db: Session) -> int:
+def run_sentinel_visual_fetch(land_id: int, db: Session, days: int = 90) -> int:
     """
-    Computes land bounding box, fetches up to 6 recent Sentinel-2 image pairs
-    (true_color + NDVI), downloads them, and stores DB records.
+    Computes land bounding box, fetches up to 30 recent Sentinel-2 image pairs
+    (true_color + NDVI) for the past 90 days, downloads them into memory, and stores DB records.
 
     Returns the number of images stored.
     """
-    logger.info("Starting Sentinel-2 visual fetch for land_id=%s", land_id)
+    logger.info("Starting Sentinel-2 visual fetch for land_id=%s, days=%d", land_id, days)
 
     # 1. Get land geometry
     land = repository.get_land(db, land_id)
@@ -44,12 +44,12 @@ def run_sentinel_visual_fetch(land_id: int, db: Session) -> int:
         logger.error("Failed to compute bbox for land %s: %s", land_id, e)
         return 0
 
-    # 2. Fetch & download real images
+    # 2. Fetch & download real images into memory
     downloaded = sentinel.fetch_and_download_sentinel_images(
         bbox=bbox,
-        land_id=land_id,
         max_cloud_cover=15,
-        limit=6,
+        limit=30,
+        days=days,
     )
 
     if not downloaded:
@@ -82,7 +82,7 @@ def run_sentinel_visual_fetch(land_id: int, db: Session) -> int:
             repository.insert_land_image(
                 db=db,
                 land_id=land_id,
-                image_path=img["local_path"],
+                image_data=img["image_data"],
                 image_type=img["image_type"],
                 cloud_cover_pct=img["cloud_cover_pct"],
                 source_id=src_id,

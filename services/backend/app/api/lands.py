@@ -117,6 +117,25 @@ def list_land_images(
     return result
 
 
+from fastapi import Response
+from app.lands import repository
+
+@router.get(
+    "/lands/{land_id}/images/{image_id}/content",
+    summary="Get raw image content (PNG)",
+)
+def get_land_image_content(
+    land_id: int,
+    image_id: int,
+    db: Session = Depends(get_db),
+):
+    image = repository.get_land_image(db, image_id)
+    if not image or image.land_id != land_id:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    return Response(content=image.image_data, media_type="image/png")
+
+
 @router.get(
     "/lands/{land_id}/crop-zones",
     response_model=CropZoneListResponse,
@@ -158,12 +177,27 @@ def reanalyze_land(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
 
     from app.tasks.sentinel_task import run_sentinel_visual_fetch
+    from app.tasks.satellite_task import run_ndvi_history_backfill
+    from app.tasks.crop_task import run_crop_detection_task
+    from app.ai.land_analyst import run_ai_land_analysis
 
     def _run_fetch():
         from app.db.session import SessionLocal
         local_db = SessionLocal()
         try:
             run_sentinel_visual_fetch(land_id, local_db)
+            
+            # Wipe existing for a clean re-analysis in demo
+            from sqlalchemy import text
+            local_db.execute(text("DELETE FROM land_crops WHERE land_id=:lid"), {"lid": land_id})
+            local_db.commit()
+            
+            # Run the new tile-level ML pipeline
+            run_ndvi_history_backfill(land_id, local_db, days=90)
+            run_crop_detection_task(land_id, local_db, days=90)
+
+            # Generate new AI Insights
+            run_ai_land_analysis(land_id, local_db, user_id=None)
         finally:
             local_db.close()
 
@@ -214,4 +248,5 @@ def get_ndvi_comparison(
     result = _get_ndvi_comparison(db, land_id, weeks)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
+    return result
     return result
