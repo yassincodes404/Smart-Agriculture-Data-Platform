@@ -310,20 +310,33 @@ export default function LandDetailsPage() {
               </p>
             )}
           </div>
-          <div className="land-detail__header-actions">
-            <button className="btn btn--danger btn--sm" onClick={handleDelete} style={{ background: "var(--error)", color: "white", border: "none" }}>
-              Delete Land
+          <div className="land-detail__header-actions" style={{ display: "flex", gap: "var(--space-sm)" }}>
+            <button className="btn btn--ghost btn--sm" onClick={handleDelete} style={{ color: "var(--error)", border: "1px solid rgba(239,68,68,0.2)", background: "rgba(239,68,68,0.05)" }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, marginRight: 6 }}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+              Delete
             </button>
-            <button className="btn btn--ghost btn--sm" onClick={() => setShowSettings(true)}>
-              ⚙ Settings
+            <button className="btn btn--secondary btn--sm" onClick={() => setShowSettings(true)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, marginRight: 6 }}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"></path></svg>
+              Settings
             </button>
-            <button className="btn btn--secondary btn--sm">Export Data</button>
+            <button className="btn btn--secondary btn--sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, marginRight: 6 }}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Export
+            </button>
             <button
               className="btn btn--primary btn--sm"
               onClick={handleReanalyze}
               disabled={reanalyzing}
+              style={{ paddingLeft: "var(--space-lg)", paddingRight: "var(--space-lg)" }}
             >
-              {reanalyzing ? "Analyzing…" : "Re-Analyze"}
+              {reanalyzing ? (
+                <>
+                  <div className="spinner spinner--sm" style={{ marginRight: 8, borderTopColor: "white", width: 14, height: 14 }} />
+                  Analyzing…
+                </>
+              ) : (
+                "Re-Analyze"
+              )}
             </button>
           </div>
         </div>
@@ -366,66 +379,63 @@ export default function LandDetailsPage() {
 
         {/* --- Re-Analysis Progress Modal --- */}
         {showProgressModal && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div className="card" style={{ width: 520, padding: "var(--space-2xl)", textAlign: "center", position: "relative", overflow: "hidden", boxShadow: "0 20px 40px rgba(0,0,0,0.2)" }}>
+          <div className="anim-fade-in" style={{ position: "fixed", inset: 0, background: "rgba(255,255,255,0.4)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div className="card" style={{ 
+              width: 520, 
+              padding: "var(--space-3xl) var(--space-2xl)", 
+              textAlign: "center", 
+              position: "relative", 
+              overflow: "hidden", 
+              boxShadow: "0 24px 60px rgba(0,0,0,0.08)",
+              border: "1px solid rgba(255,255,255,0.8)",
+              background: "rgba(255, 255, 255, 0.9)",
+              borderRadius: "24px"
+            }}>
+              {/* Background Glow */}
+              <div style={{ position: "absolute", top: "-50%", left: "-50%", width: "200%", height: "200%", background: "radial-gradient(circle at center, rgba(34,197,94,0.1) 0%, transparent 50%)", zIndex: 0, pointerEvents: "none" }} />
+              
               {/* Close Button */}
               <button 
                 onClick={() => setShowProgressModal(false)}
-                style={{ position: "absolute", top: 12, right: 12, background: "transparent", border: "none", cursor: "pointer", padding: 8, color: "var(--gray-500)", display: "flex", alignItems: "center", gap: 4 }}
+                className="btn btn--ghost btn--sm"
+                style={{ position: "absolute", top: 16, right: 16, zIndex: 2, background: "rgba(255,255,255,0.5)" }}
               >
-                <span className="text-caption">Run in background</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                Hide to background
               </button>
 
-              {/* Animated top bar */}
-              <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: "var(--gray-100)" }}>
-                <div style={{ 
-                  height: "100%", 
-                  background: "linear-gradient(90deg, var(--primary-light), var(--primary))", 
-                  width: "50%",
-                  transition: "width 0.3s ease",
-                  transform: "translateX(50%)",
-                  animation: "slide-indeterminate 1.5s infinite ease-in-out alternate" 
-                }} />
-              </div>
-              
-              <div style={{ width: 80, height: 80, background: "var(--primary-light)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto var(--space-lg)" }}>
-                <div className="spinner spinner--lg spinner--dark" style={{ borderTopColor: "var(--primary)" }}></div>
-              </div>
-
-              <h2 className="text-h2" style={{ marginBottom: "var(--space-sm)" }}>
-                Extracting Geospatial Data...
-              </h2>
-              <p className="text-body-sm" style={{ marginBottom: "var(--space-xl)", color: "var(--gray-600)", padding: "0 var(--space-md)" }}>
-                Connecting to Microsoft Planetary Computer to fetch real Sentinel-2 L2A STAC datasets for this coordinate. This may take 30-60 seconds due to raster file size.
-              </p>
-
-              <div style={{ background: "var(--gray-50)", padding: "var(--space-lg)", borderRadius: "var(--radius-md)", textAlign: "left", border: "1px solid var(--gray-200)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16, color: "var(--primary)" }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  <span className="text-body-sm" style={{ fontWeight: 600, color: "var(--gray-700)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Live Task Progress</span>
+              <div style={{ position: "relative", zIndex: 1 }}>
+                {/* Floating spinner icon */}
+                <div style={{ width: 88, height: 88, background: "linear-gradient(135deg, var(--green-100), var(--green-50))", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto var(--space-xl)", boxShadow: "0 8px 24px rgba(34,197,94,0.15)", border: "1px solid rgba(255,255,255,0.8)" }}>
+                  <div className="spinner spinner--lg spinner--dark" style={{ borderTopColor: "var(--green-600)" }}></div>
                 </div>
-                <div style={{ fontSize: 16, color: "var(--primary)", fontWeight: 600, display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-                  {land.status !== 'processing' ? land.status : 'Initializing STAC search...'}
-                  <span style={{ display: "inline-flex", gap: 2 }}>
-                    <span style={{ animation: "pulse 1s infinite alternate" }}>.</span>
-                    <span style={{ animation: "pulse 1s infinite alternate 0.2s" }}>.</span>
-                    <span style={{ animation: "pulse 1s infinite alternate 0.4s" }}>.</span>
-                  </span>
+
+                <h2 className="text-h2" style={{ marginBottom: "var(--space-sm)", fontWeight: 700, color: "var(--text-primary)", letterSpacing: "-0.5px" }}>
+                  Extracting Geospatial Data
+                </h2>
+                <p className="text-body" style={{ marginBottom: "var(--space-2xl)", color: "var(--gray-500)", padding: "0 var(--space-lg)", lineHeight: 1.6 }}>
+                  Connecting to Microsoft Planetary Computer to fetch real Sentinel-2 L2A STAC datasets. This may take up to 60 seconds.
+                </p>
+
+                {/* Progress Box */}
+                <div style={{ background: "rgba(255,255,255,0.6)", backdropFilter: "blur(4px)", padding: "var(--space-lg)", borderRadius: "16px", textAlign: "left", border: "1px solid rgba(0,0,0,0.05)", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-md)" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--green-500)", animation: "pulse 1s infinite alternate" }} />
+                    <span className="text-caption" style={{ fontWeight: 700, color: "var(--gray-600)", textTransform: "uppercase", letterSpacing: "1px" }}>Live Task Progress</span>
+                  </div>
+                  <div style={{ fontSize: 16, color: "var(--text-primary)", fontWeight: 500, display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                    {land.status !== 'processing' ? land.status : 'Downloading imagery...'}
+                    <span style={{ display: "inline-flex", gap: 2 }}>
+                      <span style={{ animation: "pulse 1s infinite alternate" }}>.</span>
+                      <span style={{ animation: "pulse 1s infinite alternate 0.2s" }}>.</span>
+                      <span style={{ animation: "pulse 1s infinite alternate 0.4s" }}>.</span>
+                    </span>
+                  </div>
                 </div>
               </div>
               
               <style>{`
-                @keyframes slide-indeterminate {
-                  0% { transform: translateX(-100%); width: 30%; }
-                  100% { transform: translateX(300%); width: 80%; }
-                }
                 @keyframes pulse {
-                  0% { opacity: 0.2; }
+                  0% { opacity: 0.3; }
                   100% { opacity: 1; }
                 }
               `}</style>
