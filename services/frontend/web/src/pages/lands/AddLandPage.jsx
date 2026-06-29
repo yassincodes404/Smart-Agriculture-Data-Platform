@@ -27,7 +27,6 @@ export default function AddLandPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [trackingFrequency, setTrackingFrequency] = useState("16 days");
-  const [primaryCrop, setPrimaryCrop] = useState("");
   const [trackingVariables, setTrackingVariables] = useState(["ndvi", "climate", "soil", "water"]);
   const [geometry, setGeometry] = useState(null);
   const [shapeStats, setShapeStats] = useState(null);
@@ -67,7 +66,6 @@ export default function AddLandPage() {
         ? trackingVariables.join(", ")
         : "standard monitoring";
       const metadata = [
-        primaryCrop.trim() ? `Primary crop: ${primaryCrop.trim()}` : null,
         `Tracking frequency: ${trackingFrequency}`,
         `Tracking variables: ${selectedVariables}`,
       ].filter(Boolean).join("\n");
@@ -201,23 +199,6 @@ export default function AddLandPage() {
             </div>
 
             <div className="add-land-fields-grid">
-              <div className="input-group">
-                <label htmlFor="primary-crop" className="input-label">
-                  Primary Crop
-                </label>
-                <div className="input-wrapper">
-                  <input
-                    id="primary-crop"
-                    type="text"
-                    className="input-field input-field--no-icon"
-                    placeholder="e.g., Wheat, Cotton, Maize"
-                    value={primaryCrop}
-                    onChange={(e) => setPrimaryCrop(e.target.value)}
-                    disabled={loading}
-                  />
-                </div>
-              </div>
-
               <div className="input-group">
                 <label htmlFor="tracking-frequency" className="input-label">
                   Tracking Frequency

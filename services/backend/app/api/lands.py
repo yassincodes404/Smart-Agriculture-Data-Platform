@@ -7,6 +7,7 @@ Land registration (GeoJSON polygon), time-series reads, and image gallery.
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user_optional, get_db
@@ -279,3 +280,22 @@ def delete_land(
     db.delete(land)
     db.commit()
     return Response(status_code=204)
+
+@router.get(
+    "/lands/{land_id}/export",
+    summary="Export land time-series data to Excel",
+)
+def export_land(land_id: int, db: Session = Depends(get_db)):
+    """Export land data including analysis and charts into an Excel sheet."""
+    excel_stream = service.export_land_to_excel(db, land_id)
+    if not excel_stream:
+        raise HTTPException(status_code=404, detail="Land not found or no data available")
+        
+    headers = {
+        'Content-Disposition': f'attachment; filename="land_{land_id}_export.xlsx"'
+    }
+    return StreamingResponse(
+        iter([excel_stream.getvalue()]), 
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers
+    )
