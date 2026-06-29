@@ -176,9 +176,15 @@ def fetch_sentinel_timeseries(land_id: int, days: int = 90) -> dict:
     dates = [datetime.now() - timedelta(days=days - i*8) for i in range(T)]
     rng = np.random.RandomState(seed=land_id * 1000)
     
-    # We simulate 2 distinct crop zones to prove multi-crop detection works natively at the tile level.
-    # Zone A (Wheat-like): high peak mid-season
-    # Zone B (Clover-like): sustained high growth
+    # We simulate 4 distinct crop zones per land.
+    # To prevent all lands from looking identical, we add variance based on the seeded rng.
+    amp_var = rng.uniform(0.8, 1.2, size=4)
+    peak_shift = rng.uniform(-0.2, 0.2, size=4)
+    
+    # Shuffle which quadrant gets which crop type
+    # Types: 0=Wheat-like, 1=Bare Soil, 2=Alfalfa, 3=Winter Onion
+    crop_types = [0, 1, 2, 3]
+    rng.shuffle(crop_types)
     
     # Create base arrays
     b02 = rng.uniform(0.02, 0.05, (T, H, W))
@@ -188,30 +194,36 @@ def fetch_sentinel_timeseries(land_id: int, days: int = 90) -> dict:
     b11 = rng.uniform(0.10, 0.20, (T, H, W))
     
     # Apply time-series curves
-    # Apply time-series curves
-    # Apply time-series curves
     for t in range(T):
         progress = t / max(1, (T - 1))
         
-        # Quadrant 1 (Top-Left)
-        q1_peak = np.sin(progress * np.pi)
-        b08[t, :H//2, :W//2] = 0.20 + (q1_peak * 0.25)  
-        b04[t, :H//2, :W//2] = 0.08 - (q1_peak * 0.04)  
+        quadrants = [
+            (slice(None, H//2), slice(None, W//2)),
+            (slice(None, H//2), slice(W//2, None)),
+            (slice(H//2, None), slice(None, W//2)),
+            (slice(H//2, None), slice(W//2, None))
+        ]
         
-        # Quadrant 2 (Top-Right) - Fallow / Bare Soil -> max/mean NDVI ~0.10
-        b08[t, :H//2, W//2:] = rng.uniform(0.12, 0.18, (H//2, W - W//2))
-        b04[t, :H//2, W//2:] = rng.uniform(0.10, 0.15, (H//2, W - W//2))
-        
-        # Quadrant 3 (Bottom-Left) - Alfalfa (Perennial) -> max NDVI ~0.85, mean ~0.65
-        q3_peak = np.ones((H - H//2, W//2)) * 0.8
-        b08[t, H//2:, :W//2] = 0.30 + (q3_peak * 0.20)
-        b04[t, H//2:, :W//2] = 0.05 - (q3_peak * 0.02)
-
-        # Quadrant 4 (Bottom-Right) - Winter Onion / Garlic -> very distinct low peak early on
-        # Make peak early
-        q4_peak = np.exp(-((progress - 0.2)**2) / 0.05)
-        b08[t, H//2:, W//2:] = 0.15 + (q4_peak * 0.25)
-        b04[t, H//2:, W//2:] = 0.08 - (q4_peak * 0.03)
+        for i, (q_y, q_x) in enumerate(quadrants):
+            c_type = crop_types[i]
+            q_shape = b08[t, q_y, q_x].shape
+            
+            if c_type == 0: # Wheat-like
+                q_prog = np.clip(progress + peak_shift[0], 0, 1)
+                peak = np.sin(q_prog * np.pi) * amp_var[0]
+                b08[t, q_y, q_x] = 0.20 + (peak * 0.25) + rng.uniform(-0.02, 0.02, q_shape)
+                b04[t, q_y, q_x] = 0.08 - (peak * 0.04) + rng.uniform(-0.01, 0.01, q_shape)
+            elif c_type == 1: # Fallow / Bare Soil
+                b08[t, q_y, q_x] = rng.uniform(0.12, 0.18, q_shape) * amp_var[1]
+                b04[t, q_y, q_x] = rng.uniform(0.10, 0.15, q_shape) * amp_var[1]
+            elif c_type == 2: # Alfalfa
+                peak = 0.8 * amp_var[2]
+                b08[t, q_y, q_x] = 0.30 + (peak * 0.20) + rng.uniform(-0.02, 0.02, q_shape)
+                b04[t, q_y, q_x] = 0.05 - (peak * 0.02) + rng.uniform(-0.01, 0.01, q_shape)
+            elif c_type == 3: # Winter Onion
+                peak = np.exp(-((progress - (0.2 - peak_shift[3]))**2) / 0.05) * amp_var[3]
+                b08[t, q_y, q_x] = 0.15 + (peak * 0.25) + rng.uniform(-0.02, 0.02, q_shape)
+                b04[t, q_y, q_x] = 0.08 - (peak * 0.03) + rng.uniform(-0.01, 0.01, q_shape)
         
         
     # Clip arrays to valid reflectance ranges
