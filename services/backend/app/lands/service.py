@@ -11,6 +11,8 @@ Land registration flow:
   5. Return land_id for pipeline to process
 """
 
+import io
+import pandas as pd
 from decimal import Decimal
 from typing import Optional
 
@@ -282,3 +284,208 @@ def list_crop_zones(db: Session, land_id: int) -> Optional[CropZoneListResponse]
         total_zones=len(items),
         zones=items,
     )
+
+
+def export_land_to_excel(db: Session, land_id: int) -> Optional[io.BytesIO]:
+    """Generates an Excel file containing summary, analysis, and timeseries data for the land."""
+    land = repository.get_land(db, land_id)
+    if not land:
+        return None
+        
+    climate_rows = repository.list_land_climate_rows(db, land_id)
+    soil_rows = repository.list_land_soil_rows(db, land_id)
+    water_rows = repository.list_land_water_rows(db, land_id)
+    crop_rows = repository.list_land_crop_rows(db, land_id)
+    
+    # Create DataFrames
+    df_climate = pd.DataFrame([{
+        "Timestamp": r.timestamp.replace(tzinfo=None),
+        "Temperature (°C)": float(r.temperature_celsius) if r.temperature_celsius is not None else None,
+        "Humidity (%)": float(r.humidity_pct) if r.humidity_pct is not None else None,
+        "Precipitation (mm)": float(r.rainfall_mm) if r.rainfall_mm is not None else None
+    } for r in climate_rows]) if climate_rows else pd.DataFrame()
+    
+    df_soil = pd.DataFrame([{
+        "Timestamp": r.timestamp.replace(tzinfo=None),
+        "Moisture (%)": float(r.moisture_pct) if r.moisture_pct else None,
+        "pH Level": float(r.ph_level) if r.ph_level else None,
+        "Soil Type": r.soil_type,
+        "Organic Matter (%)": float(r.organic_matter_pct) if r.organic_matter_pct else None
+    } for r in soil_rows]) if soil_rows else pd.DataFrame()
+    
+    df_water = pd.DataFrame([{
+        "Timestamp": r.timestamp.replace(tzinfo=None),
+        "Estimated Usage (Liters)": float(r.estimated_water_usage_liters) if r.estimated_water_usage_liters else None,
+        "Crop Water Req (mm)": float(r.crop_water_requirement_mm) if r.crop_water_requirement_mm else None,
+        "Efficiency Ratio": float(r.water_efficiency_ratio) if r.water_efficiency_ratio else None,
+        "Irrigation Status": r.irrigation_status
+    } for r in water_rows]) if water_rows else pd.DataFrame()
+    
+    df_crop = pd.DataFrame([{
+        "Timestamp": r.timestamp.replace(tzinfo=None),
+        "Crop Type": r.crop_type,
+        "NDVI": float(r.ndvi_value) if r.ndvi_value else None,
+        "EVI": float(r.evi_value) if r.evi_value else None,
+        "Growth Stage": r.growth_stage,
+        "Est. Yield (Tons)": float(r.estimated_yield_tons) if r.estimated_yield_tons else None
+    } for r in crop_rows]) if crop_rows else pd.DataFrame()
+    
+    # --- Analytics & Aggregations ---
+    avg_temp = df_climate["Temperature (°C)"].mean() if not df_climate.empty and "Temperature (°C)" in df_climate else None
+    max_temp = df_climate["Temperature (°C)"].max() if not df_climate.empty and "Temperature (°C)" in df_climate else None
+    min_temp = df_climate["Temperature (°C)"].min() if not df_climate.empty and "Temperature (°C)" in df_climate else None
+
+    avg_ndvi = df_crop["NDVI"].mean() if not df_crop.empty and "NDVI" in df_crop else None
+    max_ndvi = df_crop["NDVI"].max() if not df_crop.empty and "NDVI" in df_crop else None
+    
+    avg_moisture = df_soil["Moisture (%)"].mean() if not df_soil.empty and "Moisture (%)" in df_soil else None
+    min_moisture = df_soil["Moisture (%)"].min() if not df_soil.empty and "Moisture (%)" in df_soil else None
+    max_moisture = df_soil["Moisture (%)"].max() if not df_soil.empty and "Moisture (%)" in df_soil else None
+
+    # We will build the summary sheet manually instead of using a DataFrame to avoid overwriting issues.
+    summary_sections = [
+        ("General Information", [
+            ("Land Name", land.name),
+            ("Area (Hectares)", float(land.area_hectares) if land.area_hectares else "N/A"),
+            ("Status", land.status.capitalize() if land.status else "N/A"),
+            ("Description", land.description or "N/A"),
+        ]),
+        ("Exported Data Records", [
+            ("Climate Records", len(df_climate)),
+            ("Crop / NDVI Records", len(df_crop)),
+            ("Soil Records", len(df_soil)),
+            ("Water / Irrigation Records", len(df_water)),
+        ]),
+        ("Averages & Extremes", [
+            ("Avg Temperature (°C)", avg_temp),
+            ("Max Temperature (°C)", max_temp),
+            ("Min Temperature (°C)", min_temp),
+            ("Avg NDVI Index", avg_ndvi),
+            ("Peak NDVI Index", max_ndvi),
+            ("Avg Soil Moisture (%)", avg_moisture),
+            ("Max Soil Moisture (%)", max_moisture),
+            ("Min Soil Moisture (%)", min_moisture),
+        ])
+    ]
+    
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        workbook = writer.book
+        
+        # Create Summary Sheet FIRST so it appears as the default first tab in Excel
+        summary_sheet = workbook.add_worksheet('Summary')
+        
+        # Write data sheets next
+        if not df_climate.empty:
+            df_climate.to_excel(writer, sheet_name='Climate Data', index=False)
+        if not df_crop.empty:
+            df_crop.to_excel(writer, sheet_name='Crop Data', index=False)
+        if not df_water.empty:
+            df_water.to_excel(writer, sheet_name='Water Data', index=False)
+        if not df_soil.empty:
+            df_soil.to_excel(writer, sheet_name='Soil Data', index=False)
+        
+        # --- Rich Formatting Styles ---
+        title_format = workbook.add_format({
+            'bold': True, 'font_size': 18, 'font_color': 'white', 
+            'bg_color': '#1E3A8A', 'align': 'center', 'valign': 'vcenter', 'border': 1
+        })
+        section_format = workbook.add_format({
+            'bold': True, 'font_size': 12, 'font_color': '#1E3A8A', 
+            'bg_color': '#DBEAFE', 'border': 1, 'valign': 'vcenter'
+        })
+        metric_format = workbook.add_format({
+            'bold': True, 'bg_color': '#F3F4F6', 'border': 1, 'valign': 'vcenter'
+        })
+        value_text_format = workbook.add_format({
+            'border': 1, 'valign': 'vcenter'
+        })
+        value_num_format = workbook.add_format({
+            'border': 1, 'valign': 'vcenter', 'num_format': '#,##0.00'
+        })
+        value_int_format = workbook.add_format({
+            'border': 1, 'valign': 'vcenter', 'num_format': '#,##0'
+        })
+        
+        # Add Title
+        summary_sheet.merge_range('A1:B2', f"Land Analytics Report: {land.name}", title_format)
+        
+        # Set column widths
+        summary_sheet.set_column('A:A', 35)
+        summary_sheet.set_column('B:B', 25)
+        
+        current_row = 3
+        
+        for section_title, items in summary_sections:
+            summary_sheet.merge_range(current_row, 0, current_row, 1, section_title, section_format)
+            current_row += 1
+            for metric, value in items:
+                summary_sheet.write_string(current_row, 0, metric, metric_format)
+                
+                if value is None or value == "N/A":
+                    summary_sheet.write_string(current_row, 1, "N/A", value_text_format)
+                elif isinstance(value, float):
+                    summary_sheet.write_number(current_row, 1, value, value_num_format)
+                elif isinstance(value, int):
+                    summary_sheet.write_number(current_row, 1, value, value_int_format)
+                else:
+                    summary_sheet.write_string(current_row, 1, str(value), value_text_format)
+                current_row += 1
+            current_row += 1 # Empty row between sections
+            
+        summary_sheet.hide_gridlines(2)
+        
+        # Format other sheets as Excel Tables
+        for sheet_name, df in [('Climate Data', df_climate), ('Crop Data', df_crop), ('Water Data', df_water), ('Soil Data', df_soil)]:
+            if not df.empty:
+                worksheet = writer.sheets[sheet_name]
+                # Auto-fit columns safely
+                for i, col in enumerate(df.columns):
+                    column_len = max(df[col].astype(str).str.len().max(), len(col)) + 4
+                    worksheet.set_column(i, i, float(column_len))
+                
+                max_row, max_col = df.shape
+                worksheet.add_table(0, 0, max_row, max_col - 1, {
+                    'columns': [{'header': c} for c in df.columns],
+                    'style': 'Table Style Medium 2'
+                })
+
+        # --- Enhanced Charts ---
+        if not df_crop.empty and 'NDVI' in df_crop and len(df_crop) > 0:
+            chart = workbook.add_chart({'type': 'area'}) # Changed to area chart for cooler look
+            max_row = len(df_crop) + 1
+            chart.add_series({
+                'name':       ['Crop Data', 0, 2],
+                'categories': ['Crop Data', 1, 0, max_row - 1, 0],
+                'values':     ['Crop Data', 1, 2, max_row - 1, 2],
+                'fill':       {'color': '#10B981', 'transparency': 40},
+                'line':       {'color': '#059669', 'width': 2.5},
+            })
+            chart.set_title({'name': 'NDVI Vegetation Index', 'name_font': {'size': 14, 'color': '#1F2937'}})
+            chart.set_x_axis({'name': 'Timeline', 'num_font': {'color': '#6B7280'}})
+            chart.set_y_axis({'name': 'NDVI', 'major_gridlines': {'visible': True, 'line': {'color': '#E5E7EB'}}})
+            chart.set_chartarea({'border': {'none': True}, 'fill': {'color': '#F9FAFB'}})
+            chart.set_legend({'position': 'none'})
+            chart.set_size({'width': 650, 'height': 300})
+            summary_sheet.insert_chart('D2', chart)
+            
+        if not df_climate.empty and 'Temperature (°C)' in df_climate and len(df_climate) > 0:
+            chart_temp = workbook.add_chart({'type': 'line'})
+            max_row_temp = len(df_climate) + 1
+            chart_temp.add_series({
+                'name':       ['Climate Data', 0, 1],
+                'categories': ['Climate Data', 1, 0, max_row_temp - 1, 0],
+                'values':     ['Climate Data', 1, 1, max_row_temp - 1, 1],
+                'line':       {'color': '#F59E0B', 'width': 3}, 
+                'smooth':     True
+            })
+            chart_temp.set_title({'name': 'Temperature Trend (°C)', 'name_font': {'size': 14, 'color': '#1F2937'}})
+            chart_temp.set_x_axis({'name': 'Timeline', 'num_font': {'color': '#6B7280'}})
+            chart_temp.set_y_axis({'name': 'Temperature', 'major_gridlines': {'visible': True, 'line': {'color': '#E5E7EB'}}})
+            chart_temp.set_chartarea({'border': {'none': True}, 'fill': {'color': '#F9FAFB'}})
+            chart_temp.set_legend({'position': 'none'})
+            chart_temp.set_size({'width': 650, 'height': 300})
+            summary_sheet.insert_chart('D19', chart_temp)
+            
+    output.seek(0)
+    return output

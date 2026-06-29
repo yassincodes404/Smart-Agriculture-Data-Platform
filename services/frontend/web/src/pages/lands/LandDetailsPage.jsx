@@ -26,6 +26,7 @@ import {
   getAiInsights,
   triggerAiAnalysis,
   deleteLand,
+  exportLand,
 } from "../../services/api";
 import MapViewComponent from "../../components/map/MapViewComponent";
 import AIChatPanel from "../../components/ai/AIChatPanel";
@@ -56,6 +57,7 @@ export default function LandDetailsPage() {
   const [showAllClimate, setShowAllClimate] = useState(false);
   const [showAllWater, setShowAllWater] = useState(false);
   const [aiInsights, setAiInsights] = useState([]);
+  const [isExporting, setIsExporting] = useState(false);
   
   // Chat Sidebar Adaptivity
   const [chatState, setChatState] = useState({ isOpen: false, width: 420 });
@@ -114,6 +116,25 @@ export default function LandDetailsPage() {
       setLoading(false);
     }
   }
+
+  const handleExport = async () => {
+    try {
+      setIsExporting(true);
+      const blob = await exportLand(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `land_${id}_export.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Polling effect: if land is not active/ready, poll every 2 seconds
   useEffect(() => {
@@ -319,9 +340,22 @@ export default function LandDetailsPage() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, marginRight: 6 }}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"></path></svg>
               Settings
             </button>
-            <button className="btn btn--secondary btn--sm">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, marginRight: 6 }}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              Export
+            <button 
+              className="btn btn--secondary btn--sm" 
+              onClick={handleExport}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <>
+                  <div className="spinner spinner--sm" style={{ marginRight: 6, width: 14, height: 14 }} />
+                  Exporting...
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 14, height: 14, marginRight: 6 }}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Export
+                </>
+              )}
             </button>
             <button
               className="btn btn--primary btn--sm"

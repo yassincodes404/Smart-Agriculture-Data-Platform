@@ -164,6 +164,19 @@ export async function getLandDetail(landId) {
   return request(`/lands/${landId}`);
 }
 
+export async function exportLand(landId) {
+  const token = getToken();
+  const res = await fetch(`${API_BASE}/lands/${landId}/export`, {
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+    },
+  });
+  if (!res.ok) {
+    throw new Error("Failed to export land data");
+  }
+  return await res.blob();
+}
+
 /**
  * GET /api/v1/lands/{landId}/timeseries?metric=climate|water|crops|soil
  * Response: { land_id, metric, points: [{ timestamp, value, payload }] }
