@@ -161,25 +161,41 @@ export default function AIChatPanel({ landId, onResize }) {
           position: "fixed",
           bottom: 28,
           right: 28,
-          width: 56,
-          height: 56,
+          width: 60,
+          height: 60,
           borderRadius: "50%",
           background: "linear-gradient(135deg, #f97316, #ea580c)",
           border: "none",
           cursor: "pointer",
-          boxShadow: "0 4px 24px rgba(249,115,22,0.4)",
+          boxShadow: "0 8px 32px rgba(249,115,22,0.4)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           zIndex: 1000,
-          transition: "transform 0.2s, box-shadow 0.2s",
-          fontSize: 22,
+          transition: "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease",
+          color: "#fff",
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.1)")}
-        onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "scale(1.1) translateY(-4px)";
+          e.currentTarget.style.boxShadow = "0 12px 40px rgba(249,115,22,0.6)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "scale(1) translateY(0)";
+          e.currentTarget.style.boxShadow = "0 8px 32px rgba(249,115,22,0.4)";
+        }}
         title="Chat with AI Agronomist"
       >
-        {isOpen ? "✕" : "✨"}
+        {isOpen ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 24, height: 24 }}>
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        ) : (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 28, height: 28 }}>
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            <path d="M15 9h.01M9 9h.01M12 14h.01" />
+          </svg>
+        )}
       </button>
 
       {/* Chat sidebar */}
