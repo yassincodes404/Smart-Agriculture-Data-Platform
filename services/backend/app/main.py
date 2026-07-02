@@ -96,5 +96,33 @@ app.include_router(crops_router, prefix="/api/v1")
 app.include_router(soil_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
 
-# Removed static images mount since they are now served from the database
+# ---------------------------------------------------------------------------
+# Serve React Frontend (Single Page Application)
+# ---------------------------------------------------------------------------
 
+import os
+from fastapi.responses import FileResponse
+
+# Mount the 'assets' directory so Vite's /assets/... URLs work
+assets_path = os.path.join(os.path.dirname(__file__), "..", "static", "assets")
+if os.path.exists(assets_path):
+    app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
+
+@app.get("/{full_path:path}")
+async def serve_frontend(full_path: str):
+    """
+    Catch-all route for the React Single Page Application.
+    If the requested file exists in the static directory (e.g. vite.svg), serve it.
+    Otherwise, serve index.html and let React Router handle the URL.
+    """
+    static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+    requested_file = os.path.join(static_dir, full_path)
+    
+    if os.path.isfile(requested_file):
+        return FileResponse(requested_file)
+    
+    index_file = os.path.join(static_dir, "index.html")
+    if os.path.isfile(index_file):
+        return FileResponse(index_file)
+        
+    return {"detail": "Not Found"}

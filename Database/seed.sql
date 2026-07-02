@@ -1,9 +1,9 @@
 -- =====================================================================
 -- SEED DATA
 -- Fresh initialization with real-data readiness.
+-- PostgreSQL compatible — no USE statement needed (DB is selected
+-- automatically via POSTGRES_DB in docker-compose / .env.db).
 -- =====================================================================
-
-USE agriculture;
 
 -- --- 0. Connection Verification Data ---------------------------------
 INSERT INTO test_connection (status) VALUES ('Database Operational');

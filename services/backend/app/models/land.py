@@ -1,14 +1,13 @@
 """
 models/land.py
 --------------
-ORM for `lands` (geospatial root entity). DDL source: Database/geospatial_schema.sql
+ORM for `lands` (geospatial root entity).
 """
 
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String, Text
-from sqlalchemy.dialects.mysql import JSON
-from sqlalchemy.types import JSON as SAJSON
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.user import Base
 
@@ -25,7 +24,7 @@ class Land(Base):
     name = Column(String(255), nullable=False)
     latitude = Column(Numeric(10, 8), nullable=False)
     longitude = Column(Numeric(11, 8), nullable=False)
-    boundary_polygon = Column(SAJSON().with_variant(JSON, "mysql"), nullable=True)
+    boundary_polygon = Column(JSONB, nullable=True)
     area_hectares = Column(Numeric(12, 4), nullable=True)
     description = Column(Text, nullable=True)
     status = Column(String(128), nullable=False, default="processing")

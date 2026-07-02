@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
 
     # Database
-    DATABASE_URL: str = "mysql+pymysql://agri_user:agri_pass@mysql:3306/agriculture"
+    DATABASE_URL: str = "postgresql+psycopg2://agri_user:agri_pass@postgres:5432/agriculture"
 
     # JWT / Auth
     SECRET_KEY: str = "change-this-in-production"

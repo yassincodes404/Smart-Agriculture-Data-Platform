@@ -3,8 +3,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Text
-from sqlalchemy.dialects.mysql import JSON
-from sqlalchemy.types import JSON as SAJSON
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.user import Base
 
@@ -20,5 +19,5 @@ class AnalyticsSummary(Base):
     land_id = Column(Integer, ForeignKey("lands.land_id"), nullable=False, index=True)
     timestamp = Column(DateTime, default=_utcnow, nullable=False)
     summary_text = Column(Text, nullable=False)
-    summary_payload = Column(SAJSON().with_variant(JSON, "mysql"), nullable=True)
+    summary_payload = Column(JSONB, nullable=True)
     source_id = Column(Integer, ForeignKey("data_sources.source_id"), nullable=True)

@@ -1,34 +1,84 @@
-name: Deploy to Azure VM
+name: Build and Deploy to Azure App Service
 
 on:
   push:
     branches:
       - main
 
+env:
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/smart-agri-backend
+
 jobs:
-  deploy:
+  # -----------------------------------------------------------------------
+  # Job 1: Run backend tests (uses SQLite in-memory — no DB container needed)
+  # -----------------------------------------------------------------------
+  test:
+    name: Run Backend Tests
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Deploy to Server via SSH
-        uses: appleboy/ssh-action@v0.1.10
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
         with:
-          host: ${{ secrets.AZURE_VM_HOST }}
-          username: ${{ secrets.AZURE_VM_USERNAME }}
-          key: ${{ secrets.AZURE_VM_SSH_KEY }}
-          script: |
-            # Navigate to the project directory
-            cd /opt/agri-platform
-            
-            # Pull the latest changes from the main branch
-            git pull origin main
-            
-            # Rebuild and restart the Docker containers in detached mode
-            docker-compose down
-            docker-compose up -d --build
-            
-            # Clean up old unused Docker images to save space
-            docker image prune -f
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r services/backend/requirements.txt
+
+      - name: Run tests
+        working-directory: services/backend
+        env:
+          DATABASE_URL: "sqlite:///:memory:"
+        run: pytest --tb=short -q
+
+  # -----------------------------------------------------------------------
+  # Job 2: Build Docker image, push to Docker Hub, deploy to Azure
+  # -----------------------------------------------------------------------
+  build-and-deploy:
+    name: Build, Push & Deploy
+    runs-on: ubuntu-latest
+    needs: test  # only deploy if tests pass
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/backend
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:latest
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      # -------------------------------------------------------------------
+      # Update Azure App Service to pull the new image from Docker Hub.
+      # Requires the Azure CLI secrets below to be set in GitHub Secrets:
+      #   AZURE_CREDENTIALS  — output of: az ad sp create-for-rbac --sdk-auth
+      #   AZURE_RESOURCE_GROUP — e.g. smartAgriculture
+      #   AZURE_WEBAPP_NAME    — e.g. smartAgriculture
+      # -------------------------------------------------------------------
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          images: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Azure logout
+        run: az logout

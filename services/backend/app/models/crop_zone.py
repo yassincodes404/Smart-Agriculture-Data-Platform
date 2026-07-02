@@ -3,8 +3,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
-from sqlalchemy.dialects.mysql import JSON
-from sqlalchemy.types import JSON as SAJSON
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.user import Base
 
@@ -20,8 +19,8 @@ class CropZone(Base):
     land_id = Column(Integer, ForeignKey("lands.land_id"), nullable=False, index=True)
     crop_type = Column(String(100), nullable=False)
     area_hectares = Column(Numeric(12, 4), nullable=True)
-    area_pct = Column(Numeric(5, 2), nullable=True)          # % of total land
-    boundary_polygon = Column(SAJSON().with_variant(JSON, "mysql"), nullable=True)
+    area_pct = Column(Numeric(5, 2), nullable=True)           # % of total land
+    boundary_polygon = Column(JSONB, nullable=True)
     status = Column(String(32), nullable=False, default="active")
     avg_confidence = Column(Numeric(5, 4), nullable=True)     # avg detection confidence
     latest_ndvi = Column(Numeric(6, 4), nullable=True)

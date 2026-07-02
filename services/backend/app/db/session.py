@@ -4,8 +4,8 @@ db/session.py
 SQLAlchemy engine and session factory.
 
 Engine is created lazily on first call to get_engine() so that:
-- Test suite can import the whole app without pymysql being installed locally.
-- Tests override get_db() via dependency injection, bypassing MySQL entirely.
+- Test suite can import the whole app without psycopg2 being installed locally.
+- Tests override get_db() via dependency injection, bypassing PostgreSQL entirely.
 """
 
 import os
@@ -18,13 +18,13 @@ from sqlalchemy.orm import Session, sessionmaker
 # Connection URL — read from environment (set in .env.backend via Docker)
 # ---------------------------------------------------------------------------
 
-DB_USER = os.getenv("MYSQL_USER", "agri_user")
-DB_PASSWORD = os.getenv("MYSQL_PASSWORD", "agri_pass")
-DB_HOST = os.getenv("MYSQL_HOST", "mysql")
-DB_PORT = os.getenv("MYSQL_PORT", "3306")
-DB_NAME = os.getenv("MYSQL_DATABASE", "agriculture")
+DB_USER = os.getenv("POSTGRES_USER", "agri_user")
+DB_PASSWORD = os.getenv("POSTGRES_PASSWORD", "agri_pass")
+DB_HOST = os.getenv("POSTGRES_HOST", "postgres")
+DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+DB_NAME = os.getenv("POSTGRES_DB", "agriculture")
 
-_default_url = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+_default_url = f"postgresql+psycopg2://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # ---------------------------------------------------------------------------
 # Lazy engine + session factory

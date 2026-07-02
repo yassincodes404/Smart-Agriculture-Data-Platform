@@ -3,8 +3,8 @@ models/user.py
 --------------
 SQLAlchemy ORM definition for the `users` table.
 
-Schema from documents/backend/database-design.md:
-  user_id       BIGINT PK AUTO_INCREMENT
+Schema:
+  user_id       INT PK (SERIAL in PostgreSQL)
   email         VARCHAR(255) UNIQUE NOT NULL
   password_hash VARCHAR(255) NOT NULL
   role          VARCHAR(50) NOT NULL (admin | analyst | viewer)
@@ -15,7 +15,7 @@ Schema from documents/backend/database-design.md:
 
 from datetime import datetime, timezone
 
-from sqlalchemy import BigInteger, Boolean, Column, DateTime, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
@@ -28,9 +28,6 @@ def _utcnow() -> datetime:
 class User(Base):
     __tablename__ = "users"
 
-    # Use Integer (not BigInteger) so SQLite autoincrement works in tests.
-    # MySQL will still store this as a standard int (sufficient for user counts).
-    # If you need > 2B users, switch to BigInteger and run only against MySQL.
     user_id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
@@ -41,4 +38,3 @@ class User(Base):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<User id={self.user_id} email={self.email} role={self.role}>"
-
