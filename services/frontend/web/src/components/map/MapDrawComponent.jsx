@@ -225,6 +225,7 @@ export default function MapDrawComponent({ onGeometryChange }) {
       center: EGYPT_CENTER,
       zoom: EGYPT_ZOOM,
       zoomControl: false, // we'll add custom position
+      maxZoom: 19, // Prevent zooming into empty grey areas
     });
 
     // Zoom control top-right to avoid collision with draw toolbar
@@ -251,7 +252,9 @@ export default function MapDrawComponent({ onGeometryChange }) {
           showArea: true,
           shapeOptions: DRAW_SHAPE_OPTS,
         },
-        rectangle: false,
+        rectangle: {
+          shapeOptions: DRAW_SHAPE_OPTS,
+        },
         circle: {
           shapeOptions: DRAW_SHAPE_OPTS,
         },
@@ -269,9 +272,18 @@ export default function MapDrawComponent({ onGeometryChange }) {
     /* ── Draw events ──────────────────────────────────────────── */
     map.on(L.Draw.Event.CREATED, (e) => {
       drawnItems.clearLayers();
-      drawnItems.addLayer(e.layer);
       const { geojson, stats } = extractFromLayer(e.layer, e.layerType);
+      
+      // Prevent tiny accidental shapes (like single-click rectangles)
+      if (stats.areaApprox < 0.001) {
+        setDrawHint("Shape too small. Please click and drag to create a larger area.");
+        emitGeometry(null, null);
+        return;
+      }
+      
+      drawnItems.addLayer(e.layer);
       emitGeometry(geojson, stats);
+      setDrawHint(null);
 
       // Force Leaflet to recalculate container size after React state update
       requestAnimationFrame(() => {
@@ -330,101 +342,104 @@ export default function MapDrawComponent({ onGeometryChange }) {
     emitGeometry(null, null);
   }, [emitGeometry, stopCustomDraw]);
 
-  const startSquareDraw = useCallback(() => {
+  /* ── Draw Wrappers ─────────────────────────────────────────── */
+  const startDrawPolygon = useCallback(() => {
+    if (!mapObjRef.current) return;
+    new L.Draw.Polygon(mapObjRef.current, {
+      allowIntersection: false,
+      showArea: true,
+      shapeOptions: DRAW_SHAPE_OPTS,
+    }).enable();
+    setDrawHint("Click map to draw a custom polygon boundary");
+  }, []);
+
+  const startDrawRectangle = useCallback(() => {
     const map = mapObjRef.current;
     if (!map) return;
 
     stopCustomDraw();
-    setDrawHint("Click and drag to size a square land boundary");
+    setDrawHint("Click the center and drag outward to draw a rectangle");
     map.dragging.disable();
-    const container = map.getContainer();
-    container.style.cursor = "crosshair";
+    map.getContainer().style.cursor = "crosshair";
 
-    let startLatLng = null;
+    let centerLatLng = null;
     let previewLayer = null;
 
-    const clearPreview = () => {
-      if (previewLayer) {
-        map.removeLayer(previewLayer);
-        previewLayer = null;
-      }
+    const onMouseDown = (e) => {
+      if (e.originalEvent && e.originalEvent.button === 2) return;
+      centerLatLng = e.latlng;
+      previewLayer = L.rectangle(
+        [centerLatLng, centerLatLng],
+        DRAW_SHAPE_OPTS
+      ).addTo(map);
     };
 
-    const eventLatLng = (event) => map.mouseEventToLatLng(event);
-
-    const handlePointerDown = (event) => {
-      event.preventDefault();
-      container.setPointerCapture?.(event.pointerId);
-      startLatLng = eventLatLng(event);
-      clearPreview();
+    const onMouseMove = (e) => {
+      if (!centerLatLng || !previewLayer) return;
+      const current = e.latlng;
+      const dy = Math.abs(current.lat - centerLatLng.lat);
+      const dx = Math.abs(current.lng - centerLatLng.lng);
+      
+      const bounds = L.latLngBounds(
+        [centerLatLng.lat - dy, centerLatLng.lng - dx],
+        [centerLatLng.lat + dy, centerLatLng.lng + dx]
+      );
+      previewLayer.setBounds(bounds);
     };
 
-    const handlePointerMove = (event) => {
-      if (!startLatLng) return;
-      event.preventDefault();
-      const points = squareLatLngs(map, startLatLng, eventLatLng(event));
-      if (!previewLayer) {
-        previewLayer = L.polygon(points, DRAW_SHAPE_OPTS).addTo(map);
-      } else {
-        previewLayer.setLatLngs(points);
-      }
-    };
-
-    const handlePointerUp = (event) => {
-      if (!startLatLng) return;
-      event.preventDefault();
-      const points = squareLatLngs(map, startLatLng, eventLatLng(event));
-      const area = computeAreaHectares(points);
-      clearPreview();
+    const onMouseUp = (e) => {
+      if (!centerLatLng || !previewLayer) return;
+      
+      const current = e.latlng;
+      const dy = Math.abs(current.lat - centerLatLng.lat);
+      const dx = Math.abs(current.lng - centerLatLng.lng);
+      
+      const bounds = L.latLngBounds(
+        [centerLatLng.lat - dy, centerLatLng.lng - dx],
+        [centerLatLng.lat + dy, centerLatLng.lng + dx]
+      );
+      
+      map.removeLayer(previewLayer);
+      
+      const poly = L.rectangle(bounds, DRAW_SHAPE_OPTS);
+      const { geojson, stats } = extractFromLayer(poly, "polygon");
+      
       stopCustomDraw();
 
-      if (area < 0.01) {
+      if (stats.areaApprox < 0.001) {
+        setDrawHint("Shape too small. Please click and drag to create a larger area.");
         emitGeometry(null, null);
         return;
       }
 
-      replaceShape(L.polygon(points, DRAW_SHAPE_OPTS));
+      if (drawnItemsRef.current) {
+        drawnItemsRef.current.clearLayers();
+        drawnItemsRef.current.addLayer(poly);
+      }
+      emitGeometry(geojson, stats);
     };
+
+    map.on('mousedown', onMouseDown);
+    map.on('mousemove', onMouseMove);
+    map.on('mouseup', onMouseUp);
 
     customDrawRef.current = () => {
-      clearPreview();
-      container.removeEventListener("pointerdown", handlePointerDown);
-      container.removeEventListener("pointermove", handlePointerMove);
-      container.removeEventListener("pointerup", handlePointerUp);
-      container.removeEventListener("pointercancel", handlePointerUp);
+      if (previewLayer) map.removeLayer(previewLayer);
+      map.off('mousedown', onMouseDown);
+      map.off('mousemove', onMouseMove);
+      map.off('mouseup', onMouseUp);
+      map.dragging.enable();
+      map.getContainer().style.cursor = "";
     };
+  }, [emitGeometry, stopCustomDraw]);
 
-    container.addEventListener("pointerdown", handlePointerDown);
-    container.addEventListener("pointermove", handlePointerMove);
-    container.addEventListener("pointerup", handlePointerUp);
-    container.addEventListener("pointercancel", handlePointerUp);
-  }, [emitGeometry, replaceShape, stopCustomDraw]);
-
-  const startHexagonDraw = useCallback(() => {
-    const map = mapObjRef.current;
-    if (!map) return;
-
-    stopCustomDraw();
-    setDrawHint("Click the center point to place a six-sided land boundary");
-    const container = map.getContainer();
-    container.style.cursor = "crosshair";
-
-    const handleClick = (event) => {
-      event.preventDefault();
-      const center = map.mouseEventToLatLng(event);
-      const zoom = Math.max(map.getZoom(), 1);
-      const radiusMeters = Math.max(150, Math.min(2500, 20000 / zoom));
-      const points = regularPolygonLatLngs(center, radiusMeters, 6);
-      stopCustomDraw();
-      replaceShape(L.polygon(points, DRAW_SHAPE_OPTS));
-    };
-
-    customDrawRef.current = () => {
-      container.removeEventListener("click", handleClick);
-    };
-
-    container.addEventListener("click", handleClick, { once: true });
-  }, [replaceShape, stopCustomDraw]);
+  const startDrawCircle = useCallback(() => {
+    if (!mapObjRef.current) return;
+    new L.Draw.Circle(mapObjRef.current, {
+      shapeOptions: DRAW_SHAPE_OPTS,
+    }).enable();
+    setDrawHint("Click and drag to draw a circular boundary");
+  }, []);
 
   /* ── Toggle fullscreen ──────────────────────────────────────── */
   const toggleFullscreen = useCallback(() => {
@@ -467,19 +482,27 @@ export default function MapDrawComponent({ onGeometryChange }) {
         <div className="map-toolbar">
           <button
             type="button"
-            className="map-toolbar__btn"
-            onClick={startSquareDraw}
-            title="Click and drag to draw a square"
+            className="map-toolbar__btn map-toolbar__btn--draw"
+            onClick={startDrawPolygon}
+            title="Draw Polygon Boundary"
           >
-            Square
+            <span style={{ fontSize: 16 }}>⬠</span> Polygon
           </button>
           <button
             type="button"
-            className="map-toolbar__btn"
-            onClick={startHexagonDraw}
-            title="Click once to place a six-sided shape"
+            className="map-toolbar__btn map-toolbar__btn--draw"
+            onClick={startDrawRectangle}
+            title="Draw Rectangular Boundary"
           >
-            Hexagon
+            <span style={{ fontSize: 16 }}>⬛</span> Rectangle
+          </button>
+          <button
+            type="button"
+            className="map-toolbar__btn map-toolbar__btn--draw"
+            onClick={startDrawCircle}
+            title="Draw Circular Boundary"
+          >
+            <span style={{ fontSize: 16 }}>⭕</span> Circle
           </button>
         </div>
         <button

@@ -61,6 +61,47 @@ const DATA_SOURCES = [
   },
 ];
 
+const PLATFORM_ARCHITECTURE = [
+  {
+    name: "Groq AI & LLaMA 3",
+    description: "State-of-the-art LLM engine providing real-time AI Agronomist insights, yield predictions, and deep conversational analysis of farm data.",
+    color: "#8b5cf6",
+    bg: "rgba(139, 92, 246, 0.1)",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/>
+        <path d="M12 18a6 6 0 100-12 6 6 0 000 12z"/>
+        <path d="M12 14a2 2 0 100-4 2 2 0 000 4z"/>
+      </svg>
+    ),
+  },
+  {
+    name: "Celery & Redis Pipeline",
+    description: "Robust asynchronous task queuing system handling heavy geospatial imagery downloads from Planetary Computer without blocking the user interface.",
+    color: "var(--info)",
+    bg: "var(--info-light)",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+        <path d="M9 9h6v6H9z"/>
+      </svg>
+    ),
+  },
+  {
+    name: "PostgreSQL & PostGIS",
+    description: "Secure, highly-available relational database extended with PostGIS for advanced spatial querying, robust data validation, and safe soft-delete archiving.",
+    color: "var(--green-600)",
+    bg: "var(--green-50)",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+      </svg>
+    ),
+  }
+];
+
 export default function MethodologyPage() {
   return (
     <div className="anim-fade-in">
@@ -103,7 +144,7 @@ export default function MethodologyPage() {
       </div>
 
       {/* Data Sources */}
-      <div>
+      <div style={{ marginBottom: 'var(--space-2xl)' }}>
         <div className="section-header">
           <h2 className="section-header__title">Data Sources</h2>
         </div>
@@ -115,6 +156,24 @@ export default function MethodologyPage() {
               </div>
               <div className="content-card__title">{source.name}</div>
               <div className="content-card__description">{source.description}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Platform Architecture */}
+      <div style={{ paddingBottom: 'var(--space-2xl)' }}>
+        <div className="section-header">
+          <h2 className="section-header__title">Platform Architecture</h2>
+        </div>
+        <div className="grid-3">
+          {PLATFORM_ARCHITECTURE.map((arch, i) => (
+            <div className="content-card anim-stagger" style={{ "--stagger-index": i + 6, height: "100%" }} key={arch.name}>
+              <div className="content-card__icon" style={{ background: arch.bg, color: arch.color }}>
+                {arch.icon}
+              </div>
+              <div className="content-card__title">{arch.name}</div>
+              <div className="content-card__description">{arch.description}</div>
             </div>
           ))}
         </div>

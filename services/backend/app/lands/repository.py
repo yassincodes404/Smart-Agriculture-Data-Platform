@@ -50,6 +50,15 @@ def create_land(
 def get_land(db: Session, land_id: int) -> Optional[Land]:
     return db.get(Land, land_id)
 
+def get_land_by_public_id(db: Session, public_id: str) -> Optional[Land]:
+    """Safe lookup using public UUID instead of internal ID."""
+    from uuid import UUID
+    try:
+        uuid_val = UUID(public_id)
+    except ValueError:
+        return None
+    return db.query(Land).filter(Land.public_id == uuid_val).first()
+
 
 def list_all_lands(
     db: Session,
@@ -360,6 +369,15 @@ def list_land_alerts(
     return db.execute(stmt).scalars().all()
 
 
+def list_recent_alerts(db: Session, limit: int = 10, unresolved_only: bool = True) -> list[LandAlert]:
+    """List recent alerts across all lands (for notifications)."""
+    stmt = select(LandAlert)
+    if unresolved_only:
+        stmt = stmt.where(LandAlert.resolved_at.is_(None))
+    stmt = stmt.order_by(LandAlert.timestamp.desc()).limit(limit)
+    return db.execute(stmt).scalars().all()
+
+
 # ---------------------------------------------------------------------------
 # Crop Zones
 # ---------------------------------------------------------------------------
@@ -429,3 +447,22 @@ def update_crop_zone_stats(
     if estimated_yield_tons is not None:
         zone.estimated_yield_tons = Decimal(str(estimated_yield_tons))
     db.flush()
+from sqlalchemy import text
+def delete_land_cascading(db: Session, land_id: int) -> bool:
+    land = db.get(Land, land_id)
+    if not land:
+        return False
+    lid = land_id
+    db.execute(text('DELETE FROM ai_chat_messages WHERE session_id IN (SELECT session_id FROM ai_chat_sessions WHERE land_id=:lid)'), {'lid': lid})
+    db.execute(text('DELETE FROM ai_chat_sessions WHERE land_id=:lid'), {'lid': lid})
+    db.execute(text('DELETE FROM land_ai_insights WHERE land_id=:lid'), {'lid': lid})
+    db.execute(text('DELETE FROM land_climate WHERE land_id=:lid'), {'lid': lid})
+    db.execute(text('DELETE FROM land_soil WHERE land_id=:lid'), {'lid': lid})
+    db.execute(text('DELETE FROM land_water WHERE land_id=:lid'), {'lid': lid})
+    db.execute(text('DELETE FROM land_images WHERE land_id=:lid'), {'lid': lid})
+    db.execute(text('DELETE FROM land_crops WHERE land_id=:lid'), {'lid': lid})
+    db.execute(text('DELETE FROM land_alerts WHERE land_id=:lid'), {'lid': lid})
+    db.execute(text('DELETE FROM land_soil_profiles WHERE land_id=:lid'), {'lid': lid})
+    db.execute(text('DELETE FROM crop_zones WHERE land_id=:lid'), {'lid': lid})
+    db.delete(land)
+    return True

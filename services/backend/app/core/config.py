@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     # JWT / Auth
     SECRET_KEY: str = "change-this-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # External services
     OPENAI_API_KEY: str = ""
@@ -29,6 +30,10 @@ class Settings(BaseSettings):
     # Sentinel-2 / Copernicus Data Space
     COPERNICUS_CLIENT_ID: str = ""
     COPERNICUS_CLIENT_SECRET: str = ""
+
+    # Google OAuth 2.0
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""  # Optional, used if switching to full OAuth code flow later
 
     # Satellite monitoring
     SATELLITE_IMAGE_INTERVAL_DAYS: int = 5

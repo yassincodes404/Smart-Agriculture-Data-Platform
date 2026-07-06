@@ -26,11 +26,14 @@ VALID_ROLES = {"admin", "analyst", "viewer"}
 # ---------------------------------------------------------------------------
 
 class UserCreate(BaseModel):
-    """Body for POST /auth/register"""
+    """Body for POST /auth/register
+    Note: 'admin' role cannot be created via registration.
+    Only two fixed admin accounts exist (seeded in database).
+    """
 
     email: EmailStr
     password: str
-    role: Literal["admin", "analyst", "viewer"] = "viewer"
+    role: Literal["analyst", "viewer"] = "viewer"
 
     @field_validator("password")
     @classmethod
@@ -79,10 +82,12 @@ class UserResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Returned after successful login."""
+    """Returned after successful login (Auth v2 with refresh)."""
 
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+    expires_in: int = 15 * 60  # seconds
 
 
 # ---------------------------------------------------------------------------

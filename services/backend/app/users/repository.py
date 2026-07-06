@@ -31,14 +31,14 @@ def get_all_users(db: Session) -> list[User]:
     return db.query(User).order_by(User.created_at.desc()).all()
 
 
-def create_user(db: Session, email: str, password_hash: str, role: str) -> User:
+def create_user(db: Session, email: str, password_hash: str | None = None, role: str = "viewer") -> User:
     """
     Persist a new user record.
 
     Args:
         db: active database session.
-        email: unique user email (should be validated before calling).
-        password_hash: pre-hashed password (never plain text).
+        email: unique user email.
+        password_hash: pre-hashed password, or None for Google-only users.
         role: one of admin | analyst | viewer.
 
     Returns:
@@ -87,3 +87,64 @@ def delete_user(db: Session, user_id: int) -> bool:
     db.delete(user)
     db.commit()
     return True
+
+
+# ---------------------------------------------------------------------------
+# Activity Logs (admin only)
+# ---------------------------------------------------------------------------
+
+from app.models.activity_log import UserActivityLog
+
+
+def get_activity_logs(
+    db: Session,
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[UserActivityLog]:
+    q = db.query(UserActivityLog)
+    if user_id is not None:
+        q = q.filter(UserActivityLog.user_id == user_id)
+    if action:
+        q = q.filter(UserActivityLog.action == action)
+    return (
+        q.order_by(UserActivityLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+
+def count_activity_logs(
+    db: Session, user_id: Optional[int] = None, action: Optional[str] = None
+) -> int:
+    q = db.query(UserActivityLog)
+    if user_id is not None:
+        q = q.filter(UserActivityLog.user_id == user_id)
+    if action:
+        q = q.filter(UserActivityLog.action == action)
+    return q.count()
+
+
+def create_activity_log(
+    db: Session,
+    user_id: int,
+    action: str,
+    target_type: Optional[str] = None,
+    target_id: Optional[int] = None,
+    details: Optional[dict] = None,
+    ip_address: Optional[str] = None,
+) -> UserActivityLog:
+    log = UserActivityLog(
+        user_id=user_id,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        details=details or {},
+        ip_address=ip_address,
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    return log

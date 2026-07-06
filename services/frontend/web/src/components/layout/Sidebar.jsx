@@ -81,14 +81,9 @@ const icons = {
       <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   ),
-  compare: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 21l6-6M9 8l-5 5M4 13v5h5M4 18l6-6" />
-    </svg>
-  ),
 };
 
-const navItems = [
+const baseNavItems = [
   { section: "MAIN" },
   { to: "/dashboard", icon: "dashboard", label: "Dashboard" },
   { to: "/lands",     icon: "lands",     label: "Lands Explorer" },
@@ -103,16 +98,30 @@ const navItems = [
   { to: "/team",    icon: "team",    label: "Team" },
   { to: "/about",   icon: "about",   label: "About" },
   { to: "/profile", icon: "profile", label: "Profile" },
-  { to: "/logs",    icon: "logs",    label: "Activity Logs" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const navItems = [
+    ...baseNavItems,
+    ...(user?.role === "admin" ? [{ to: "/logs", icon: "logs", label: "Activity Logs" }] : []),
+  ];
+
+  const handleNavClick = () => {
+    // On mobile, close the drawer after navigation
+    if (typeof window !== 'undefined' && window.innerWidth <= 768 && onClose) {
+      onClose();
+    }
+  };
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
+    if (typeof window !== 'undefined' && window.innerWidth <= 768 && onClose) {
+      onClose();
+    }
   };
 
   /** Get user's initials for avatar */
@@ -132,6 +141,28 @@ export default function Sidebar() {
           </svg>
         </div>
         <span className="sidebar__logo-text">AgriData Egypt</span>
+
+        {/* Mobile close button (X) inside drawer for easy close - robust UX */}
+        {typeof window !== 'undefined' && window.innerWidth <= 768 && onClose && (
+          <button 
+            onClick={onClose} 
+            className="sidebar__close-btn"
+            aria-label="Close sidebar"
+            style={{ 
+              marginLeft: 'auto', 
+              background: 'none', 
+              border: 'none', 
+              color: 'rgba(255,255,255,0.8)', 
+              fontSize: '28px',
+              lineHeight: 1,
+              cursor: 'pointer',
+              padding: '0 8px',
+              opacity: 0.9
+            }}
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -153,6 +184,7 @@ export default function Sidebar() {
               className={({ isActive }) =>
                 `sidebar__link${isActive ? " sidebar__link--active" : ""}`
               }
+              onClick={handleNavClick}
             >
               <span className="sidebar__link-icon">{icons[item.icon]}</span>
               <span className="sidebar__link-text">{item.label}</span>

@@ -16,6 +16,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+# Centralized security layer
+from app.security import SecurityHeadersMiddleware, RateLimitMiddleware
+
 # Import base so all models are registered with SQLAlchemy metadata
 from app.db import base as _models_discovery  # noqa: F401
 
@@ -30,6 +33,7 @@ from app.api.lands import router as lands_router
 from app.api.crops import router as crops_router
 from app.api.soil import router as soil_router
 from app.api.ai import router as ai_router
+from app.api.activity_logs import router as activity_logs_router
 
 # ---------------------------------------------------------------------------
 # App initialisation
@@ -55,6 +59,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Apply centralized security middlewares
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware, limit=120, window_seconds=60)  # 120 req/min per IP
 
 # ---------------------------------------------------------------------------
 # Database table auto-creation (development convenience)
@@ -95,6 +103,7 @@ app.include_router(lands_router, prefix="/api/v1")
 app.include_router(crops_router, prefix="/api/v1")
 app.include_router(soil_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
+app.include_router(activity_logs_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # Serve React Frontend (Single Page Application)
@@ -119,10 +128,36 @@ async def serve_frontend(full_path: str):
     requested_file = os.path.join(static_dir, full_path)
     
     if os.path.isfile(requested_file):
-        return FileResponse(requested_file)
+        # Add a reasonably strict CSP for production static assets
+        # (no unsafe-eval — requires that your prod build doesn't use eval)
+        response = FileResponse(requested_file)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https:; "   # unsafe-inline often still needed for some bundles
+            "style-src 'self' 'unsafe-inline' https:; "
+            "img-src 'self' data: blob: https:; "
+            "connect-src 'self' https:; "
+            "font-src 'self' https:; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "frame-ancestors 'none';"
+        )
+        return response
     
     index_file = os.path.join(static_dir, "index.html")
     if os.path.isfile(index_file):
-        return FileResponse(index_file)
+        response = FileResponse(index_file)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https:; "
+            "style-src 'self' 'unsafe-inline' https:; "
+            "img-src 'self' data: blob: https:; "
+            "connect-src 'self' https:; "
+            "font-src 'self' https:; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "frame-ancestors 'none';"
+        )
+        return response
         
     return {"detail": "Not Found"}

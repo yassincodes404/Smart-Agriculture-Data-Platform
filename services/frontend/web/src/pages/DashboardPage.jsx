@@ -8,7 +8,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { listLands, getLandTimeseries, getCropHealth, getHarvestPrediction, healthCheck } from "../services/api";
+import { listLands, getLandTimeseries, getCropHealth, getHarvestPrediction, healthCheck, getAiInsights, triggerAiAnalysis } from "../services/api";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import NDVIChart from "../components/charts/NDVIChart";
 import "./Dashboard.css";
 
@@ -22,6 +23,10 @@ export default function DashboardPage() {
   const [harvest, setHarvest] = useState(null);
   const [backendOk, setBackendOk] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [aiInsights, setAiInsights] = useState([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  const [analyzingLandId, setAnalyzingLandId] = useState(null);
 
   useEffect(() => {
     async function load() {
@@ -38,16 +43,32 @@ export default function DashboardPage() {
         // Prefer a land that already has an active/ready status for dashboard metrics.
         if (allLands.length > 0) {
           const preferredLand = allLands.find((land) => land.status === "ready" || land.status === "active") || allLands[0];
-          const preferredLandId = preferredLand.land_id;
-          getLandTimeseries(preferredLandId, "crops")
+          const preferredLandPublicId = preferredLand.public_id;
+          getLandTimeseries(preferredLandPublicId, "crops")
             .then((r) => setNdviData(r.points || []))
             .catch(() => {});
-          getCropHealth(preferredLandId)
+          getCropHealth(preferredLandPublicId)
             .then((r) => setCropHealth(r))
             .catch(() => {});
-          getHarvestPrediction(preferredLandId)
+          getHarvestPrediction(preferredLandPublicId)
             .then((r) => setHarvest(r))
             .catch(() => {});
+            
+          // Fetch AI Insights
+          setAiLoading(true);
+          setAiError(null);
+          getAiInsights(preferredLandPublicId)
+            .then((r) => setAiInsights(r.insights || []))
+            .catch((err) => {
+              console.error("Failed to load AI insights:", err);
+              if (err.response?.status === 429) {
+                setAiError("AI Quota Finished. Please try again later or upgrade your plan.");
+              } else {
+                setAiError("Could not load AI Insights right now.");
+              }
+              setAiInsights([]);
+            })
+            .finally(() => setAiLoading(false));
         }
       } catch {
         // non-critical
@@ -62,6 +83,40 @@ export default function DashboardPage() {
   const readyCount = lands.filter((l) => l.status === "ready" || l.status === "active").length;
   const processingCount = lands.filter((l) => l.status === "processing").length;
   const latestNDVI = ndviData.length > 0 ? ndviData[ndviData.length - 1]?.value : null;
+  const preferredLandId = lands.find((land) => land.status === "ready" || land.status === "active")?.public_id || lands[0]?.public_id;
+
+  const handleTriggerAnalysis = async () => {
+    if (!preferredLandId) return;
+    setAnalyzingLandId(preferredLandId);
+    setAiError(null);
+    try {
+      await triggerAiAnalysis(preferredLandId);
+      // Wait a bit, then re-fetch
+      setTimeout(async () => {
+        try {
+          const res = await getAiInsights(preferredLandId);
+          setAiInsights(res.insights || []);
+          setAiError(null);
+        } catch (err) {
+          if (err.response?.status === 429) {
+            setAiError("AI Quota Finished. Please try again later.");
+          } else {
+            setAiError("Failed to fetch new AI Insights.");
+          }
+        } finally {
+          setAnalyzingLandId(null);
+        }
+      }, 3000);
+    } catch (err) {
+      console.error(err);
+      if (err.response?.status === 429) {
+        setAiError("AI Quota Finished. Please try again later.");
+      } else {
+        setAiError("Failed to trigger AI Analysis.");
+      }
+      setAnalyzingLandId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -79,11 +134,11 @@ export default function DashboardPage() {
 
   return (
     <div className="anim-fade-in">
-      <div className="page-header">
-        <h1 className="page-header__title">
+      <div className="premium-hero">
+        <h1 className="page-header__title" style={{ color: "var(--green-800)", marginBottom: "var(--space-xs)" }}>
           Welcome back, {user?.email?.split("@")[0] || "Farmer"} 👋
         </h1>
-        <p className="page-header__subtitle">
+        <p className="page-header__subtitle" style={{ fontSize: "1.1rem", color: "var(--green-700)" }}>
           Here's the latest intelligence from your {lands.length} registered land{lands.length !== 1 ? "s" : ""}.
         </p>
       </div>
@@ -95,42 +150,25 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* System Status */}
-      <div className="anim-stagger" style={{ "--stagger-index": 0 }}>
-        {backendOk !== null && (
-          <div className={`alert alert--${backendOk ? "success" : "error"}`} style={{ marginBottom: "var(--space-lg)" }}>
-            {backendOk
-              ? "✅ All systems operational — Backend API, Database, and Frontend connected."
-              : "⚠️ Backend API is unreachable. Some features may not work."}
-          </div>
-        )}
-      </div>
+      {/* System Status removed per user request */}
 
       {/* Stat Cards */}
       <div className="grid-4 anim-stagger" style={{ "--stagger-index": 1, marginBottom: "var(--space-xl)" }}>
-        <div className="stat-card stat-card--green" onClick={() => navigate("/lands")} style={{ cursor: "pointer" }}>
-          <div className="stat-card__content">
-            <div className="stat-card__value">{lands.length}</div>
-            <div className="stat-card__label">Total Lands</div>
-          </div>
+        <div className="premium-stat-card" onClick={() => navigate("/lands")} style={{ cursor: "pointer" }}>
+          <div className="stat-card__value" style={{ color: "var(--green-600)" }}>{lands.length}</div>
+          <div className="stat-card__label">Total Lands</div>
         </div>
-        <div className="stat-card stat-card--blue">
-          <div className="stat-card__content">
-            <div className="stat-card__value">{totalArea.toFixed(1)}</div>
-            <div className="stat-card__label">Total Hectares</div>
-          </div>
+        <div className="premium-stat-card">
+          <div className="stat-card__value" style={{ color: "var(--info)" }}>{totalArea.toFixed(1)}</div>
+          <div className="stat-card__label">Total Hectares</div>
         </div>
-        <div className="stat-card stat-card--amber">
-          <div className="stat-card__content">
-            <div className="stat-card__value">{latestNDVI !== null ? latestNDVI.toFixed(2) : "—"}</div>
-            <div className="stat-card__label">Latest NDVI</div>
-          </div>
+        <div className="premium-stat-card">
+          <div className="stat-card__value" style={{ color: "var(--amber-500)" }}>{latestNDVI !== null ? latestNDVI.toFixed(2) : "—"}</div>
+          <div className="stat-card__label">Latest NDVI</div>
         </div>
-        <div className="stat-card stat-card--green">
-          <div className="stat-card__content">
-            <div className="stat-card__value">{readyCount}/{lands.length}</div>
-            <div className="stat-card__label">Lands Active</div>
-          </div>
+        <div className="premium-stat-card">
+          <div className="stat-card__value" style={{ color: "var(--green-600)" }}>{readyCount}/{lands.length}</div>
+          <div className="stat-card__label">Lands Active</div>
         </div>
       </div>
 
@@ -153,60 +191,97 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* Intelligence Feed */}
-        <div className="card card--no-hover" style={{ flex: 1 }}>
+        {/* Lands Breakdown Chart */}
+        <div className="card card--no-hover" style={{ flex: 1, display: "flex", flexDirection: "column" }}>
           <div className="section-header" style={{ marginBottom: "var(--space-md)" }}>
-            <h2 className="section-header__title">Intelligence</h2>
-            <span className="badge badge--info">
-              <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 12, height: 12 }}>
-                <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm-.5 3a.5.5 0 011 0v4a.5.5 0 01-1 0V4zm.5 7.5a.75.75 0 110-1.5.75.75 0 010 1.5z" />
-              </svg>
-              AI
-            </span>
+            <h2 className="section-header__title">Lands Breakdown</h2>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-            {cropHealth && (
-              <div className="intel-item">
-                <div className="intel-item__dot" style={{ background: cropHealth.health_score >= 70 ? "var(--green-500)" : "var(--amber-500)" }} />
-                <div>
-                  <div className="text-body-sm" style={{ fontWeight: 600 }}>Crop Health: {cropHealth.health_score}/100</div>
-                  <div className="text-caption">{cropHealth.advice?.slice(0, 100)}...</div>
-                </div>
-              </div>
-            )}
-            {harvest && harvest.prediction_available && (
-              <div className="intel-item">
-                <div className="intel-item__dot" style={{ background: harvest.days_to_harvest <= 14 ? "var(--amber-500)" : "var(--green-500)" }} />
-                <div>
-                  <div className="text-body-sm" style={{ fontWeight: 600 }}>
-                    Harvest in {harvest.days_to_harvest} days
-                  </div>
-                  <div className="text-caption">
-                    Window: {harvest.estimated_harvest_start} → {harvest.estimated_harvest_end}
-                  </div>
-                </div>
-              </div>
-            )}
-            {latestNDVI !== null && (
-              <div className="intel-item">
-                <div className="intel-item__dot" style={{ background: latestNDVI > 0.5 ? "var(--green-500)" : "var(--amber-500)" }} />
-                <div>
-                  <div className="text-body-sm" style={{ fontWeight: 600 }}>NDVI: {latestNDVI.toFixed(2)}</div>
-                  <div className="text-caption">
-                    Stage: {ndviData[ndviData.length - 1]?.payload?.growth_stage?.replace("_", " ")} •
-                    Trend: {ndviData[ndviData.length - 1]?.payload?.ndvi_trend}
-                  </div>
-                </div>
-              </div>
-            )}
-            {!cropHealth && !harvest && latestNDVI === null && (
-              <div className="empty-state" style={{ padding: "var(--space-md)" }}>
-                <p className="text-body-sm">Register a land to see AI insights.</p>
-              </div>
-            )}
+          <div style={{ flex: 1, minHeight: 200, width: "100%" }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Active', value: readyCount, color: 'var(--green-500)' },
+                    { name: 'Processing', value: processingCount, color: 'var(--info)' },
+                    { name: 'Error', value: lands.filter((l) => l.status === "error").length, color: 'var(--error)' },
+                  ].filter(d => d.value > 0)}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {
+                    [
+                      { name: 'Active', value: readyCount, color: 'var(--green-500)' },
+                      { name: 'Processing', value: processingCount, color: 'var(--info)' },
+                      { name: 'Error', value: lands.filter((l) => l.status === "error").length, color: 'var(--error)' },
+                    ].filter(d => d.value > 0).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))
+                  }
+                </Pie>
+                <Tooltip 
+                  contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }} 
+                />
+                <Legend verticalAlign="bottom" height={36}/>
+              </PieChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
+
+      {/* AI Insights Panel */}
+      {preferredLandId && (
+        <div className="ai-insights-panel anim-stagger" style={{ "--stagger-index": 3 }}>
+          <div className="ai-insights-header">
+            <div>
+              <span className="ai-badge">✨ AI Agronomist</span>
+              <h2 className="section-header__title" style={{ marginTop: "var(--space-sm)" }}>Deep Intelligence</h2>
+            </div>
+            <button 
+              className="ai-trigger-btn" 
+              onClick={handleTriggerAnalysis}
+              disabled={analyzingLandId === preferredLandId}
+            >
+              {analyzingLandId === preferredLandId ? "Analyzing..." : "Generate AI Analysis"}
+            </button>
+          </div>
+          
+          {aiLoading ? (
+            <div style={{ padding: "var(--space-xl)", textAlign: "center", color: "var(--text-secondary)" }}>
+              Loading AI Insights...
+            </div>
+          ) : aiError ? (
+            <div className="alert alert--error" style={{ margin: "var(--space-md)", padding: "var(--space-lg)" }}>
+              <div style={{ fontWeight: 600, marginBottom: "var(--space-xs)" }}>AI Analysis Error</div>
+              {aiError}
+            </div>
+          ) : aiInsights.length > 0 ? (
+            <div className="ai-card-grid">
+              {aiInsights.map((insight) => (
+                <div key={insight.insight_id} className="ai-insight-card">
+                  <div className="ai-insight-title">{insight.title}</div>
+                  <div className="ai-insight-body">{insight.body}</div>
+                  <div style={{ marginTop: "var(--space-sm)", display: "flex", gap: "var(--space-sm)" }}>
+                    <span className="badge badge--info" style={{ fontSize: "0.75rem" }}>
+                      Confidence: {Math.round(insight.confidence * 100)}%
+                    </span>
+                    <span className="badge badge--neutral" style={{ fontSize: "0.75rem" }}>
+                      {insight.model_used || "groq"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state" style={{ padding: "var(--space-xl)" }}>
+              <p className="text-body-sm">No AI insights generated yet. Click the button above to run an analysis on your primary land.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Recent Lands */}
       {lands.length > 0 && (
@@ -223,7 +298,7 @@ export default function DashboardPage() {
                 key={land.land_id}
                 className="land-card anim-stagger"
                 style={{ "--stagger-index": i + 4, cursor: "pointer" }}
-                onClick={() => navigate(`/lands/${land.land_id}`)}
+                onClick={() => navigate(`/lands/${land.public_id}`)}
               >
                 <div className="land-card__thumb">
                   <div className="land-card__thumb-gradient" />

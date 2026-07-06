@@ -1,3 +1,7 @@
+# Multi-container orchestration (recommended)
+# Services: postgres, backend, scheduler (background), frontend (vite dev), nginx (proxy)
+# Use: docker compose up --build -d
+# Single container alternative exists at root Dockerfile (bundles FE+BE) but multi is preferred.
 
 services:
 
@@ -56,6 +60,7 @@ services:
       - CHOKIDAR_USEPOLLING=true
       - WATCHPACK_POLLING=true
       - VITE_API_URL=http://backend:8000
+      - VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID:-596375721075-itbl6d2i44kekhniujmmm0g8jovoc9i6.apps.googleusercontent.com}
     volumes:
       - ./services/frontend/web:/app
       - /app/node_modules

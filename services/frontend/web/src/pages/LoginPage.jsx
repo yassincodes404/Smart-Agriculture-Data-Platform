@@ -6,7 +6,7 @@
  * Right: login form
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import "./AuthPages.css";
@@ -18,8 +18,35 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const { login } = useAuth();
+  const { login, googleSignIn } = useAuth();
   const navigate = useNavigate();
+
+  // Initialize Google Sign In button
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+    if (window.google && clientId) {
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (response) => {
+          if (response.credential) {
+            handleGoogleSuccess(response.credential);
+          }
+        },
+      });
+
+      // Render the button
+      const buttonDiv = document.getElementById("google-signin-button");
+      if (buttonDiv) {
+        window.google.accounts.id.renderButton(buttonDiv, {
+          theme: "outline",
+          size: "large",
+          width: "100%",
+          text: "signin_with",
+        });
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,6 +58,19 @@ export default function LoginPage() {
       navigate("/dashboard");
     } catch (err) {
       setError(err.message || "Invalid email or password.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSuccess = async (credential) => {
+    setError("");
+    setLoading(true);
+    try {
+      await googleSignIn(credential);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err.message || "Google sign in failed.");
     } finally {
       setLoading(false);
     }
@@ -172,6 +212,21 @@ export default function LoginPage() {
                 "Sign In"
               )}
             </button>
+
+            {/* Google Sign In */}
+            <div style={{ marginTop: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+                <span style={{ fontSize: "12px", color: "var(--gray-500)" }}>or</span>
+                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+              </div>
+              <div id="google-signin-button" style={{ display: "flex", justifyContent: "center" }}></div>
+              {!import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                <p style={{ fontSize: "11px", color: "#f59e0b", textAlign: "center", marginTop: "4px" }}>
+                  Set VITE_GOOGLE_CLIENT_ID in .env to enable Google Sign-In
+                </p>
+              )}
+            </div>
           </form>
 
           <div className="auth-form-footer">

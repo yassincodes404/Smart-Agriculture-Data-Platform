@@ -28,3 +28,4 @@ from app.models.crop_zone import CropZone  # noqa: F401
 from app.models.ai_settings import AiApiKey  # noqa: F401
 from app.models.ai_chat import AiChatSession, AiChatMessage  # noqa: F401
 from app.models.land_ai_insight import LandAiInsight  # noqa: F401
+from app.models.activity_log import UserActivityLog  # noqa: F401

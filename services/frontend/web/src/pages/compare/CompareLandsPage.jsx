@@ -8,6 +8,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { listLands, getLandDetail, getLandTimeseries, getCropHealth } from "../../services/api";
 import "../Pages.css";
+import "./CompareLands.css";
 
 export default function CompareLandsPage() {
   const [lands, setLands] = useState([]);
@@ -26,13 +27,19 @@ export default function CompareLandsPage() {
       try {
         const res = await listLands();
         if (res.lands) {
-          setLands(res.lands);
-          if (res.lands.length > 0) {
-            setLandAId(res.lands[0].land_id.toString());
-            if (res.lands.length > 1) {
-              setLandBId(res.lands[1].land_id.toString());
+          // Only allow comparing lands that have successfully processed data
+          const validLands = res.lands.filter(l => {
+            const s = (l.status || "").toLowerCase();
+            return s === "ready" || s === "active" || s === "completed";
+          });
+          
+          setLands(validLands);
+          if (validLands.length > 0) {
+            setLandAId(validLands[0].land_id.toString());
+            if (validLands.length > 1) {
+              setLandBId(validLands[1].land_id.toString());
             } else {
-              setLandBId(res.lands[0].land_id.toString());
+              setLandBId(validLands[0].land_id.toString());
             }
           }
         }
@@ -134,10 +141,10 @@ export default function CompareLandsPage() {
   const displayB = getDisplayData(dataB);
 
   return (
-    <div className="anim-fade-in" style={{ paddingBottom: "var(--space-2xl)" }}>
-      <div className="page-header">
-        <h1 className="page-header__title">Compare Lands</h1>
-        <p className="page-header__subtitle">
+    <div className="anim-fade-in compare-container" style={{ paddingBottom: "var(--space-2xl)" }}>
+      <div className="page-header" style={{ textAlign: "center", marginBottom: "var(--space-2xl)" }}>
+        <h1 className="page-header__title" style={{ fontSize: "2.5rem", background: "linear-gradient(90deg, var(--green-600), var(--blue-600))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Compare Lands</h1>
+        <p className="page-header__subtitle" style={{ maxWidth: "600px", margin: "0 auto" }}>
           Side-by-side comparison of land metrics, health, and 365-day NDVI performance.
         </p>
       </div>
@@ -149,36 +156,48 @@ export default function CompareLandsPage() {
       )}
 
       {/* Selectors */}
-      <div className="grid-2" style={{ marginBottom: 'var(--space-xl)', gap: 'var(--space-xl)' }}>
-        <div className="card anim-stagger" style={{ "--stagger-index": 0 }}>
-          <label className="text-overline" style={{ display: "block", marginBottom: "var(--space-xs)" }}>
-            Select Land A
+      <div className="compare-selectors-grid">
+        <div className="compare-card-a anim-stagger" style={{ "--stagger-index": 0 }}>
+          <label className="text-overline" style={{ display: "block", marginBottom: "var(--space-sm)", color: "var(--green-600)" }}>
+            Land A
           </label>
           <select 
-            className="input-field" 
+            className="compare-select" 
             value={landAId} 
             onChange={e => setLandAId(e.target.value)}
-            style={{ width: "100%", padding: "var(--space-sm)", borderRadius: "var(--radius-sm)" }}
+            disabled={lands.length === 0}
           >
-            {lands.map(l => (
-              <option key={l.land_id} value={l.land_id}>{l.name}</option>
-            ))}
+            {lands.length === 0 ? (
+              <option value="">No lands available</option>
+            ) : (
+              lands.map(l => (
+                <option key={l.land_id} value={l.land_id}>{l.name}</option>
+              ))
+            )}
           </select>
         </div>
         
-        <div className="card anim-stagger" style={{ "--stagger-index": 1 }}>
-          <label className="text-overline" style={{ display: "block", marginBottom: "var(--space-xs)" }}>
-            Select Land B
+        <div className="compare-vs-badge anim-stagger" style={{ "--stagger-index": 1 }}>
+          VS
+        </div>
+        
+        <div className="compare-card-b anim-stagger" style={{ "--stagger-index": 2 }}>
+          <label className="text-overline" style={{ display: "block", marginBottom: "var(--space-sm)", color: "var(--amber-600)" }}>
+            Land B
           </label>
           <select 
-            className="input-field" 
+            className="compare-select" 
             value={landBId} 
             onChange={e => setLandBId(e.target.value)}
-            style={{ width: "100%", padding: "var(--space-sm)", borderRadius: "var(--radius-sm)" }}
+            disabled={lands.length === 0}
           >
-            {lands.map(l => (
-              <option key={l.land_id} value={l.land_id}>{l.name}</option>
-            ))}
+            {lands.length === 0 ? (
+              <option value="">No lands available</option>
+            ) : (
+              lands.map(l => (
+                <option key={l.land_id} value={l.land_id}>{l.name}</option>
+              ))
+            )}
           </select>
         </div>
       </div>
@@ -247,8 +266,8 @@ export default function CompareLandsPage() {
           </div>
 
           {/* Comparison Table */}
-          <div className="card card--no-hover anim-stagger" style={{ "--stagger-index": 5, padding: 0, overflow: 'hidden' }}>
-            <table className="logs-table">
+          <div className="compare-table-wrapper anim-stagger" style={{ "--stagger-index": 5, marginBottom: 'var(--space-xl)' }}>
+            <table className="premium-compare-table">
               <thead>
                 <tr>
                   <th>Metric</th>
@@ -258,28 +277,50 @@ export default function CompareLandsPage() {
               </thead>
               <tbody>
                 <tr>
-                  <td style={{ fontWeight: 600 }}>Crop Type</td>
-                  <td style={{ textAlign: 'center' }}>{displayA.crop}</td>
-                  <td style={{ textAlign: 'center' }}>{displayB.crop}</td>
+                  <td className="metric-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    Crop Type
+                  </td>
+                  <td style={{ textAlign: 'center' }} className="value-a">{displayA.crop}</td>
+                  <td style={{ textAlign: 'center' }} className="value-b">{displayB.crop}</td>
                 </tr>
                 <tr>
-                  <td style={{ fontWeight: 600 }}>Area</td>
-                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{displayA.area}</td>
-                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{displayB.area}</td>
+                  <td className="metric-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+                    Area
+                  </td>
+                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }} className="value-a">{displayA.area}</td>
+                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }} className="value-b">{displayB.area}</td>
                 </tr>
                 <tr>
-                  <td style={{ fontWeight: 600 }}>Latest NDVI</td>
-                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                  <td className="metric-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    Latest NDVI
+                  </td>
+                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }} className="value-a">
                     {typeof displayA.ndvi === "number" ? displayA.ndvi.toFixed(2) : displayA.ndvi}
                   </td>
-                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }} className="value-b">
                     {typeof displayB.ndvi === "number" ? displayB.ndvi.toFixed(2) : displayB.ndvi}
                   </td>
                 </tr>
                 <tr>
-                  <td style={{ fontWeight: 600 }}>AI Health Score</td>
-                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{displayA.healthScore} / 100</td>
-                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{displayB.healthScore} / 100</td>
+                  <td className="metric-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    AI Health Score
+                  </td>
+                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                    <span className={`badge badge--${displayA.status}`}>
+                      <span className="badge__dot" />
+                      {displayA.healthScore} / 100
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>
+                    <span className={`badge badge--${displayB.status}`}>
+                      <span className="badge__dot" />
+                      {displayB.healthScore} / 100
+                    </span>
+                  </td>
                 </tr>
               </tbody>
             </table>

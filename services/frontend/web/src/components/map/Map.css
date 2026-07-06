@@ -24,10 +24,14 @@
   z-index: 9999;
   border-radius: 0;
   border: none;
+  display: flex;
+  flex-direction: column;
 }
 
 .map-draw-wrapper--fullscreen .map-container {
-  height: 100vh !important;
+  flex: 1 !important;
+  height: 100% !important;
+  width: 100% !important;
 }
 
 /* --- Map Container --- */
@@ -304,10 +308,14 @@
   z-index: 9999;
   border-radius: 0;
   border: none;
+  display: flex;
+  flex-direction: column;
 }
 
 .map-view-wrapper--fullscreen .map-container--view {
-  height: 100vh !important;
+  flex: 1 !important;
+  height: 100% !important;
+  width: 100% !important;
 }
 
 /* View-specific container height */
@@ -443,4 +451,8 @@
     flex-wrap: wrap;
     gap: var(--space-sm);
   }
+}
+
+.leaflet-draw.leaflet-control {
+  display: none !important;
 }

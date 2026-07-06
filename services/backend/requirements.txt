@@ -16,6 +16,7 @@ python-multipart
 
 pandas
 numpy
+xlsxwriter
 
 
 scikit-learn
@@ -23,6 +24,10 @@ scikit-learn
 httpx
 requests
 apscheduler
+
+# Google OAuth
+google-auth
+google-auth-oauthlib
 
 pytest
 pytest-asyncio

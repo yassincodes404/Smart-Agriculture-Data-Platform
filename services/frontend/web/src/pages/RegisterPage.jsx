@@ -4,7 +4,7 @@
  * Registration page — same split layout as LoginPage.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import "./AuthPages.css";
@@ -18,7 +18,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const { register } = useAuth();
+  const { register, googleSignIn } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -44,6 +44,45 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  const handleGoogleSuccess = async (credential) => {
+    setError("");
+    setLoading(true);
+    try {
+      await googleSignIn(credential);
+      navigate("/dashboard");
+    } catch (err) {
+      setError(err.message || "Google sign up failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initialize Google Sign In
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+    if (window.google && clientId) {
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (response) => {
+          if (response.credential) {
+            handleGoogleSuccess(response.credential);
+          }
+        },
+      });
+
+      const buttonDiv = document.getElementById("google-signup-button");
+      if (buttonDiv) {
+        window.google.accounts.id.renderButton(buttonDiv, {
+          theme: "outline",
+          size: "large",
+          width: "100%",
+          text: "signup_with",
+        });
+      }
+    }
+  }, []);
 
   return (
     <div className="auth-layout">
@@ -211,7 +250,6 @@ export default function RegisterPage() {
                 >
                   <option value="viewer">Viewer</option>
                   <option value="analyst">Analyst</option>
-                  <option value="admin">Admin</option>
                 </select>
               </div>
             </div>
@@ -231,6 +269,21 @@ export default function RegisterPage() {
                 "Create Account"
               )}
             </button>
+
+            {/* Google Sign Up */}
+            <div style={{ marginTop: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+                <span style={{ fontSize: "12px", color: "var(--gray-500)" }}>or</span>
+                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+              </div>
+              <div id="google-signup-button" style={{ display: "flex", justifyContent: "center" }}></div>
+              {!import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                <p style={{ fontSize: "11px", color: "#f59e0b", textAlign: "center", marginTop: "4px" }}>
+                  Set VITE_GOOGLE_CLIENT_ID in .env to enable Google Sign-In
+                </p>
+              )}
+            </div>
           </form>
 
           <div className="auth-form-footer">

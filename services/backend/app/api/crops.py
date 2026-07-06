@@ -12,39 +12,40 @@ from app.crops.schemas import (
     HarvestPredictionResponse,
 )
 from app.crops import service as crop_service
+from app.security import require_land_access
 
 router = APIRouter(tags=["crops"])
 
 
 @router.get(
-    "/lands/{land_id}/crop-detection",
+    "/lands/{public_id}/crop-detection",
     response_model=CropDetectionResponse,
     summary="Detect likely crop type from NDVI spectral signature",
 )
-def crop_detection(land_id: int, db: Session = Depends(get_db)):
+def crop_detection(public_id: str, land = Depends(require_land_access), db: Session = Depends(get_db)):
     """
     Returns the most likely crop type based on NDVI value and season.
     Uses crop_profiles.json reference data for spectral matching.
     """
-    result = crop_service.get_crop_detection(db, land_id)
+    result = crop_service.get_crop_detection(db, land.land_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
     return result
 
 
 @router.get(
-    "/lands/{land_id}/crop-health",
+    "/lands/{public_id}/crop-health",
     response_model=CropHealthResponse,
     summary="Current crop health based on NDVI vs expected range",
 )
-def crop_health(land_id: int, db: Session = Depends(get_db)):
+def crop_health(public_id: str, land = Depends(require_land_access), db: Session = Depends(get_db)):
     """
     Compares current NDVI against expected range from crop profiles.
     Returns health status (0–100 score), classification, and farming advice.
     """
     from app.intelligence.engine import CropIntelligenceEngine
     engine = CropIntelligenceEngine()
-    report = engine.analyze_land(land_id, db)
+    report = engine.analyze_land(land.land_id, db)
     
     if report.land_id == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
@@ -67,7 +68,7 @@ def crop_health(land_id: int, db: Session = Depends(get_db)):
     overall_status = "excellent" if report.overall_health >= 85 else "good" if report.overall_health >= 70 else "fair" if report.overall_health >= 50 else "poor"
         
     return {
-        "land_id": land_id,
+        "land_id": land.land_id,
         "ndvi_current": overall_ndvi,
         "overall_health_score": report.overall_health,
         "overall_health_status": overall_status,
@@ -78,28 +79,29 @@ def crop_health(land_id: int, db: Session = Depends(get_db)):
 
 
 @router.get(
-    "/lands/{land_id}/crop-status",
+    "/lands/{public_id}/crop-status",
     response_model=CropStatusResponse,
     summary="Current growth stage and NDVI trend",
 )
-def crop_status(land_id: int, db: Session = Depends(get_db)):
+def crop_status(public_id: str, land = Depends(require_land_access), db: Session = Depends(get_db)):
     """
     Returns current growth stage (planting → vegetative → flowering → maturity → harvest)
     and NDVI trend direction (improving / stable / declining).
     """
-    result = crop_service.get_crop_status(db, land_id)
+    result = crop_service.get_crop_status(db, land.land_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
     return result
 
 
 @router.get(
-    "/lands/{land_id}/crop-trend",
+    "/lands/{public_id}/crop-trend",
     response_model=CropTrendResponse,
     summary="NDVI time-series with trend analysis",
 )
 def crop_trend(
-    land_id: int,
+    public_id: str,
+    land = Depends(require_land_access),
     days: int = Query(90, ge=16, le=365, description="Analysis window in days"),
     db: Session = Depends(get_db),
 ):
@@ -107,18 +109,18 @@ def crop_trend(
     Returns full NDVI time-series for the requested period.
     Includes trend direction, slope (NDVI/16-day), min/max/mean, and anomaly flag.
     """
-    result = crop_service.get_crop_trend(db, land_id, days=days)
+    result = crop_service.get_crop_trend(db, land.land_id, days=days)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
     return result
 
 
 @router.get(
-    "/lands/{land_id}/harvest-prediction",
+    "/lands/{public_id}/harvest-prediction",
     response_model=HarvestPredictionResponse,
     summary="Estimated harvest window based on NDVI peak analysis",
 )
-def harvest_prediction(land_id: int, db: Session = Depends(get_db)):
+def harvest_prediction(public_id: str, land = Depends(require_land_access), db: Session = Depends(get_db)):
     """
     Detects NDVI peak (flowering/pollination) and uses crop calendar to
     estimate the harvest start/end window.
@@ -126,7 +128,7 @@ def harvest_prediction(land_id: int, db: Session = Depends(get_db)):
     """
     from app.intelligence.engine import CropIntelligenceEngine
     engine = CropIntelligenceEngine()
-    report = engine.analyze_land(land_id, db)
+    report = engine.analyze_land(land.land_id, db)
     
     if report.land_id == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
@@ -152,7 +154,7 @@ def harvest_prediction(land_id: int, db: Session = Depends(get_db)):
                 overall_start = z.next_harvest_est
 
     return {
-        "land_id": land_id,
+        "land_id": land.land_id,
         "prediction_available": overall_days is not None,
         "days_to_harvest": overall_days,
         "estimated_harvest_start": overall_start.isoformat() if overall_start else None,

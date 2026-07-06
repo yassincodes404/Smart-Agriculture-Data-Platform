@@ -39,19 +39,41 @@ from app.lands.schemas import (
 
 def list_all_lands(db: Session, user_id: Optional[int] = None) -> LandListResponse:
     """Return all lands as lightweight list items."""
+    from app.models.land_image import LandImage
+    from sqlalchemy import select, desc
+
     rows = repository.list_all_lands(db, user_id=user_id)
-    items = [
-        LandListItem(
-            land_id=int(r.land_id),
-            name=r.name,
-            latitude=float(r.latitude),
-            longitude=float(r.longitude),
-            area_hectares=float(r.area_hectares) if r.area_hectares is not None else None,
-            status=r.status,
-            created_at=r.created_at.isoformat(),
+    
+    # Fetch latest true_color images for these lands
+    land_ids = [r.land_id for r in rows]
+    latest_images = {}
+    if land_ids:
+        stmt = select(LandImage).where(
+            LandImage.land_id.in_(land_ids),
+            LandImage.image_type == "true_color"
+        ).order_by(desc(LandImage.timestamp))
+        for img in db.execute(stmt).scalars().all():
+            if img.land_id not in latest_images:
+                latest_images[img.land_id] = img
+
+    items = []
+    for r in rows:
+        latest_img = latest_images.get(r.land_id)
+        latest_image_url = f"/api/v1/lands/{r.public_id}/images/{latest_img.id}/content" if latest_img else None
+        
+        items.append(
+            LandListItem(
+                land_id=int(r.land_id),
+                public_id=str(r.public_id),
+                name=r.name,
+                latitude=float(r.latitude),
+                longitude=float(r.longitude),
+                area_hectares=float(r.area_hectares) if r.area_hectares is not None else None,
+                status=r.status,
+                created_at=r.created_at.isoformat(),
+                latest_image_url=latest_image_url,
+            )
         )
-        for r in rows
-    ]
     return LandListResponse(lands=items, total=len(items))
 
 
@@ -108,6 +130,25 @@ def get_land_detail(db: Session, land_id: int) -> Optional[LandDetailResponse]:
         return None
     return LandDetailResponse(
         land_id=int(land.land_id),
+        public_id=str(land.public_id) if land.public_id else None,
+        name=land.name,
+        description=land.description,
+        latitude=float(land.latitude),
+        longitude=float(land.longitude),
+        area_hectares=float(land.area_hectares) if land.area_hectares is not None else None,
+        status=land.status,
+        boundary_polygon=land.boundary_polygon,
+        created_at=land.created_at.isoformat(),
+    )
+
+def get_land_by_public_id(db: Session, public_id: str) -> Optional[LandDetailResponse]:
+    """Safe public lookup (used by security layer)."""
+    land = repository.get_land_by_public_id(db, public_id)
+    if land is None:
+        return None
+    return LandDetailResponse(
+        land_id=int(land.land_id),
+        public_id=str(land.public_id) if land.public_id else None,
         name=land.name,
         description=land.description,
         latitude=float(land.latitude),
@@ -227,14 +268,19 @@ def land_timeseries(
 def list_images(
     db: Session,
     land_id: int,
+    public_id: Optional[str] = None,
     image_type: Optional[str] = None,
 ) -> Optional[LandImageListResponse]:
     if repository.get_land(db, land_id) is None:
         return None
     rows = repository.list_land_images(db, land_id, image_type=image_type)
     items = []
+    
+    # Fallback to land_id if public_id is not provided (though it should be)
+    pid = public_id if public_id else land_id
+    
     for r in rows:
-        image_url = f"/api/v1/lands/{land_id}/images/{r.id}/content"
+        image_url = f"/api/v1/lands/{pid}/images/{r.id}/content"
 
         items.append(
             LandImageItem(

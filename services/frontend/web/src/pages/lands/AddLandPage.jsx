@@ -17,11 +17,13 @@
 import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { discoverLand } from "../../services/api";
+import { useNotifications } from "../../context/NotificationContext";
 import MapDrawComponent from "../../components/map/MapDrawComponent";
 import "../Lands.css";
 
 export default function AddLandPage() {
   const navigate = useNavigate();
+  const { addNotification } = useNotifications();
 
   /* ── Form state ─────────────────────────────────────────────── */
   const [name, setName] = useState("");
@@ -82,9 +84,17 @@ export default function AddLandPage() {
       // Phase 2: Success
       setPhase("done");
 
+      // Push a UI notification (surfaces in header bell)
+      addNotification({
+        type: "land_created",
+        severity: "low",
+        message: `Land "${name.trim() || 'New land'}" registered successfully. Monitoring started.`,
+        land_id: result.public_id,
+      });
+
       // Short delay to show success state, then redirect
       setTimeout(() => {
-        navigate(`/lands/${result.land_id}`);
+        navigate(`/lands/${result.public_id}`);
       }, 1200);
     } catch (err) {
       setError(err.message || "Failed to register land. Please try again.");
@@ -316,7 +326,7 @@ export default function AddLandPage() {
                   <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: "var(--gray-100)" }}>
                     <div style={{ 
                       height: "100%", 
-                      background: "linear-gradient(90deg, var(--primary-light), var(--primary))", 
+                      background: "linear-gradient(90deg, var(--green-100), var(--green-600))", 
                       width: "50%",
                       transition: "width 0.3s ease",
                       transform: "translateX(50%)",
@@ -324,8 +334,8 @@ export default function AddLandPage() {
                     }} />
                   </div>
                   
-                  <div style={{ width: 80, height: 80, background: "var(--primary-light)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto var(--space-lg)" }}>
-                    <div className="spinner spinner--lg spinner--dark" style={{ borderTopColor: "var(--primary)" }}></div>
+                  <div style={{ width: 80, height: 80, background: "var(--green-50)", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto var(--space-lg)" }}>
+                    <div className="spinner spinner--lg spinner--dark" style={{ borderTopColor: "var(--green-600)" }}></div>
                   </div>
 
                   <h2 className="text-h2" style={{ marginBottom: "var(--space-sm)" }}>
@@ -337,12 +347,12 @@ export default function AddLandPage() {
 
                   <div style={{ background: "var(--gray-50)", padding: "var(--space-lg)", borderRadius: "var(--radius-md)", textAlign: "left", border: "1px solid var(--gray-200)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)", marginBottom: "var(--space-sm)" }}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16, color: "var(--primary)" }}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16, color: "var(--green-600)" }}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                       <span className="text-body-sm" style={{ fontWeight: 600, color: "var(--gray-700)", textTransform: "uppercase", letterSpacing: "0.5px" }}>Live Task Progress</span>
                     </div>
-                    <div style={{ fontSize: 16, color: "var(--primary)", fontWeight: 600, display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                    <div style={{ fontSize: 16, color: "var(--green-600)", fontWeight: 600, display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
                       Initializing STAC search...
                       <span style={{ display: "inline-flex", gap: 2 }}>
                         <span style={{ animation: "pulse 1s infinite alternate" }}>.</span>

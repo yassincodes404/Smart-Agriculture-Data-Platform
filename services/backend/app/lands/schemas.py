@@ -68,6 +68,7 @@ class LandDiscoverRequest(BaseModel):
 class LandDiscoverAccepted(BaseModel):
     status: str
     land_id: int
+    public_id: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +77,7 @@ class LandDiscoverAccepted(BaseModel):
 
 class LandDetailResponse(BaseModel):
     land_id: int
+    public_id: str
     name: str
     description: Optional[str]
     latitude: float
@@ -89,12 +91,14 @@ class LandDetailResponse(BaseModel):
 class LandListItem(BaseModel):
     """Lightweight land summary for list views."""
     land_id: int
+    public_id: str
     name: str
     latitude: float
     longitude: float
     area_hectares: Optional[float]
     status: str
     created_at: str
+    latest_image_url: Optional[str] = None
 
 
 class LandListResponse(BaseModel):

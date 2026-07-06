@@ -11,8 +11,11 @@
  * - isAuthenticated boolean
  */
 
+// Force full reload on HMR for this file to avoid "useAuth export is incompatible" Fast Refresh issues
+// @refresh reset
+
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { loginUser, registerUser, logoutUser, getMe, getToken, clearToken } from "../services/api";
+import { loginUser, registerUser, logoutUser, getMe, getToken, clearToken, setTokens, googleLogin } from "../services/api";
 
 const AuthContext = createContext(null);
 
@@ -32,21 +35,36 @@ export function AuthProvider({ children }) {
           setUser(null);
         })
         .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
     }
   }, []);
 
   const login = useCallback(async (email, password) => {
     setError(null);
     const res = await loginUser({ email, password });
-    // After login, fetch full user profile
-    const meRes = await getMe();
-    setUser(meRes.data);
+    // Fetch user profile in background (don't block login success)
+    getMe()
+      .then((meRes) => setUser(meRes.data))
+      .catch(() => {
+        // if fails, user can still be logged in with token
+      });
     return res;
   }, []);
 
   const register = useCallback(async (email, password, role = "viewer") => {
     setError(null);
     const res = await registerUser({ email, password, role });
+    return res;
+  }, []);
+
+  const googleSignIn = useCallback(async (credential) => {
+    setError(null);
+    const res = await googleLogin(credential);
+    // Fetch user profile in background
+    getMe()
+      .then((meRes) => setUser(meRes.data))
+      .catch(() => {});
     return res;
   }, []);
 
@@ -59,9 +77,10 @@ export function AuthProvider({ children }) {
     user,
     loading,
     error,
-    isAuthenticated: !!user,
+    isAuthenticated: !!user || !!getToken(),
     login,
     register,
+    googleSignIn,
     logout,
   };
 

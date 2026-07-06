@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_user, get_db
 from app.models.user import User
+from app.security import require_land_access
 from app.ai import repository as ai_repo
 from app.ai.groq_client import GroqClient
 from app.ai.land_analyst import build_chat_system_message, run_ai_land_analysis
@@ -114,18 +115,19 @@ def toggle_api_key(
 # AI Chat Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/ai/lands/{land_id}/chat")
+@router.get("/ai/lands/{public_id}/chat")
 def get_chat_history(
-    land_id: int,
+    public_id: str,
+    land = Depends(require_land_access),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve the full chat history for a land."""
-    session = ai_repo.get_or_create_session(db, land_id=land_id, user_id=current_user.user_id)
+    session = ai_repo.get_or_create_session(db, land_id=land.land_id, user_id=current_user.user_id)
     messages = ai_repo.list_messages(db, session_id=session.session_id)
     return {
         "session_id": session.session_id,
-        "land_id": land_id,
+        "land_id": land.land_id,
         "messages": [
             {
                 "message_id": m.message_id,
@@ -138,10 +140,11 @@ def get_chat_history(
     }
 
 
-@router.post("/ai/lands/{land_id}/chat")
+@router.post("/ai/lands/{public_id}/chat")
 def send_chat_message(
-    land_id: int,
+    public_id: str,
     body: ChatMessageRequest,
+    land = Depends(require_land_access),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -153,7 +156,7 @@ def send_chat_message(
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
     # Get or create session
-    session = ai_repo.get_or_create_session(db, land_id=land_id, user_id=current_user.user_id)
+    session = ai_repo.get_or_create_session(db, land_id=land.land_id, user_id=current_user.user_id)
 
     # Store user message
     ai_repo.add_message(db, session_id=session.session_id, role="user", content=body.message)
@@ -161,7 +164,7 @@ def send_chat_message(
     # Build conversation history for Groq (last 20 messages for context)
     history = ai_repo.list_messages(db, session_id=session.session_id)
     conversation_messages = [
-        {"role": "system", "content": build_chat_system_message(land_id, db)}
+        {"role": "system", "content": build_chat_system_message(land.land_id, db)}
     ]
     for m in history[-20:]:
         conversation_messages.append({"role": m.role, "content": m.content})
@@ -202,14 +205,15 @@ def send_chat_message(
     }
 
 
-@router.delete("/ai/lands/{land_id}/chat")
+@router.delete("/ai/lands/{public_id}/chat")
 def clear_chat_history(
-    land_id: int,
+    public_id: str,
+    land = Depends(require_land_access),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Clear all messages in the chat session for this land."""
-    session = ai_repo.get_or_create_session(db, land_id=land_id, user_id=current_user.user_id)
+    session = ai_repo.get_or_create_session(db, land_id=land.land_id, user_id=current_user.user_id)
     ai_repo.clear_session(db, session_id=session.session_id, user_id=current_user.user_id)
     return {"message": "Chat history cleared."}
 
@@ -218,15 +222,16 @@ def clear_chat_history(
 # AI Insights Endpoints
 # ---------------------------------------------------------------------------
 
-@router.get("/ai/lands/{land_id}/insights")
+@router.get("/ai/lands/{public_id}/insights")
 def get_ai_insights(
-    land_id: int,
+    public_id: str,
+    land = Depends(require_land_access),
     db: Session = Depends(get_db),
 ):
     """Get all AI-generated insights for a land (no auth required to read)."""
-    insights = ai_repo.get_insights_for_land(db, land_id=land_id)
+    insights = ai_repo.get_insights_for_land(db, land_id=land.land_id)
     return {
-        "land_id": land_id,
+        "land_id": land.land_id,
         "insights": [
             {
                 "insight_id": ins.insight_id,
@@ -243,13 +248,15 @@ def get_ai_insights(
     }
 
 
-@router.post("/ai/lands/{land_id}/analyze")
+@router.post("/ai/lands/{public_id}/analyze")
 def trigger_ai_analysis(
-    land_id: int,
-    background_tasks: BackgroundTasks,
+    public_id: str,
+    land = Depends(require_land_access),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Trigger a fresh AI analysis for a land in the background."""
-    background_tasks.add_task(run_ai_land_analysis, land_id=land_id, db=db, user_id=current_user.user_id)
-    return {"message": "AI analysis started. Insights will be available shortly."}
+    """Trigger a fresh AI analysis for a land synchronously."""
+    insights = run_ai_land_analysis(land_id=land.land_id, db=db, user_id=current_user.user_id)
+    if not insights:
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="AI Quota Finished or Analysis Failed.")
+    return {"message": "AI analysis complete.", "insights": True}

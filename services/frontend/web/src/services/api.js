@@ -14,64 +14,147 @@
  *   Health: GET /api/health
  */
 
+// For web (behind nginx or Vite proxy): "/api/v1"
+// For mobile / direct: use full URL e.g. "http://10.0.2.2:8000/api/v1" (Android emulator) or your LAN IP
 const API_BASE = "/api/v1";
 
-/**
- * Get the stored JWT token.
- */
-export function getToken() {
-  return localStorage.getItem("agri_token");
-}
-
-/**
- * Store the JWT token.
- */
-export function setToken(token) {
-  localStorage.setItem("agri_token", token);
-}
-
-/**
- * Remove the JWT token.
- */
-export function clearToken() {
+// Token storage - can be overridden for React Native (AsyncStorage / SecureStore)
+let _getToken = () => localStorage.getItem("agri_token");
+let _setToken = (t) => localStorage.setItem("agri_token", t);
+let _getRefresh = () => localStorage.getItem("agri_refresh_token");
+let _setRefresh = (t) => localStorage.setItem("agri_refresh_token", t);
+let _clear = () => {
   localStorage.removeItem("agri_token");
+  localStorage.removeItem("agri_refresh_token");
+};
+
+export function configureTokenStorage({ getToken, setToken, getRefreshToken, setRefreshToken, clearTokens }) {
+  if (getToken) _getToken = getToken;
+  if (setToken) _setToken = setToken;
+  if (getRefreshToken) _getRefresh = getRefreshToken;
+  if (setRefreshToken) _setRefresh = setRefreshToken;
+  if (clearTokens) _clear = clearTokens;
+}
+
+let accessToken = _getToken();
+let refreshToken = _getRefresh();
+
+export function getToken() {
+  return _getToken();
+}
+
+export function getRefreshToken() {
+  return _getRefresh();
+}
+
+export function setTokens(access, refresh) {
+  accessToken = access;
+  refreshToken = refresh;
+  if (access != null) _setToken(access);
+  if (refresh != null) _setRefresh(refresh);
+}
+
+export function clearToken() {
+  accessToken = null;
+  refreshToken = null;
+  _clear();
 }
 
 /**
  * Make an authenticated API request.
- * All responses from the backend follow the envelope: { status, data, message, meta }
+ * Supports automatic token refresh on 401.
  */
-async function request(endpoint, options = {}) {
-  const token = getToken();
+let isRefreshing = false;
+let refreshSubscribers = [];
 
-  const headers = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
-  };
+function subscribeTokenRefresh(cb) {
+  refreshSubscribers.push(cb);
+}
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
+function onRefreshed(newAccess) {
+  refreshSubscribers.forEach((cb) => cb(newAccess));
+  refreshSubscribers = [];
+}
+
+async function refreshAccessToken() {
+  const rToken = getRefreshToken();
+  if (!rToken) throw new Error("No refresh token");
+
+  const res = await fetch(`${API_BASE}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refresh_token: rToken }),
   });
 
-  // Handle non-JSON responses gracefully
-  let data;
+  if (!res.ok) {
+    clearToken();
+    throw new Error("Refresh failed");
+  }
+
+  const json = await res.json();
+  const { access_token, refresh_token: newRefresh } = json.data || {};
+  setTokens(access_token, newRefresh || rToken);
+  return access_token;
+}
+
+async function request(endpoint, options = {}) {
+  let token = getToken();
+
+  const makeRequest = async (authToken) => {
+    const headers = {
+      "Content-Type": "application/json",
+      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      ...options.headers,
+    };
+
+    const response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error(`Request failed with status ${response.status}`);
+    }
+
+    if (!response.ok) {
+      const errorMessage = data.detail || data.message || `Request failed with status ${response.status}`;
+      const err = new Error(errorMessage);
+      err.status = response.status;
+      throw err;
+    }
+    return data;
+  };
+
   try {
-    data = await response.json();
-  } catch {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
+    return await makeRequest(token);
+  } catch (err) {
+    if (err.status === 401 && getRefreshToken()) {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        try {
+          const newAccess = await refreshAccessToken();
+          isRefreshing = false;
+          onRefreshed(newAccess);
+          return await makeRequest(newAccess);
+        } catch (refreshErr) {
+          isRefreshing = false;
+          clearToken();
+          throw refreshErr;
+        }
+      }
 
-  if (!response.ok) {
-    const errorMessage =
-      data.detail ||
-      data.message ||
-      `Request failed with status ${response.status}`;
-    throw new Error(errorMessage);
+      // Wait for ongoing refresh
+      return new Promise((resolve, reject) => {
+        subscribeTokenRefresh((newAccess) => {
+          makeRequest(newAccess).then(resolve).catch(reject);
+        });
+      });
+    }
+    throw err;
   }
-
-  return data;
 }
 
 /* ----------------------------------------------------------------
@@ -102,9 +185,10 @@ export async function loginUser({ email, password }) {
     body: JSON.stringify({ email, password }),
   });
 
-  // Store the token automatically on successful login
-  if (data?.data?.access_token) {
-    setToken(data.data.access_token);
+  // Store both access + refresh tokens (Auth v2)
+  const tok = data?.data;
+  if (tok?.access_token) {
+    setTokens(tok.access_token, tok.refresh_token);
   }
 
   return data;
@@ -128,6 +212,24 @@ export async function logoutUser() {
   } finally {
     clearToken();
   }
+}
+
+/**
+ * Google OAuth 2.0 Sign In / Sign Up
+ * Sends the ID token received from Google Identity Services.
+ */
+export async function googleLogin(credential) {
+  const data = await request("/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ credential }),
+  });
+
+  const tok = data?.data;
+  if (tok?.access_token) {
+    setTokens(tok.access_token, tok.refresh_token);
+  }
+
+  return data;
 }
 
 /* ----------------------------------------------------------------
@@ -238,6 +340,14 @@ export async function getNdviComparison(landId, weeks = 8) {
   return request(`/lands/${landId}/ndvi-comparison?weeks=${weeks}`);
 }
 
+/**
+ * GET /api/v1/lands/notifications?limit=..
+ * Returns recent alerts for the notification bell. Uses LandAlert system.
+ */
+export async function listNotifications(limit = 10) {
+  return request(`/lands/notifications?limit=${limit}`);
+}
+
 /* ----------------------------------------------------------------
    Crop Intelligence Endpoints
    Backend: app/api/crops.py
@@ -287,6 +397,16 @@ export async function getSoilSuitability(landId, crop = null) {
 /** GET /api/v1/lands/{landId}/soil-status */
 export async function getSoilStatus(landId) {
   return request(`/lands/${landId}/soil-status`);
+}
+
+/* ----------------------------------------------------------------
+   Admin Activity Logs (only for role=admin)
+   ---------------------------------------------------------------- */
+
+/** GET /api/v1/activity-logs */
+export async function getActivityLogs(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  return request(`/activity-logs${qs ? "?" + qs : ""}`);
 }
 
 /* ----------------------------------------------------------------

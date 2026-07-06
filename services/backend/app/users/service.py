@@ -14,6 +14,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core import security
+from app.core.activity import log_activity
+from app.core.google_auth import verify_google_token
 from app.models.user import User
 from app.users import repository
 from app.users.schemas import UserCreate, UserUpdate
@@ -37,7 +39,10 @@ def register_user(db: Session, user_in: UserCreate) -> User:
             detail="A user with this email already exists.",
         )
     hashed = security.hash_password(user_in.password)
-    return repository.create_user(db, user_in.email, hashed, user_in.role)
+    # Security: never allow admin creation through registration.
+    # Only the two seeded admin accounts (in init/seed.sql) may have role=admin.
+    role = user_in.role if user_in.role in ("analyst", "viewer") else "viewer"
+    return repository.create_user(db, user_in.email, hashed, role)
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +57,22 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
         401 Unauthorized — if email not found or password is wrong.
     """
     user = repository.get_user_by_email(db, email)
-    if user is None or not security.verify_password(password, user.password_hash):
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Google-only users have no password
+    if user.password_hash is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This account uses Google Sign-In. Please sign in with Google.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not security.verify_password(password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
@@ -142,3 +162,90 @@ def delete_user(db: Session, user_id: int) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"User with id={user_id} not found.",
         )
+
+
+# ---------------------------------------------------------------------------
+# Activity Logs (admin view + internal logging helper)
+# ---------------------------------------------------------------------------
+
+def get_activity_logs(db, user_id=None, action=None, limit=100, offset=0):
+    return repository.get_activity_logs(db, user_id, action, limit, offset)
+
+
+def count_activity_logs(db, user_id=None, action=None):
+    return repository.count_activity_logs(db, user_id, action)
+
+
+def record_activity(
+    db,
+    user_id: int,
+    action: str,
+    target_type: str | None = None,
+    target_id: int | None = None,
+    details: dict | None = None,
+    ip_address: str | None = None,
+):
+    """Internal helper used by other modules."""
+    # Also write to the simple core logger (which does its own commit)
+    log_activity(db, user_id, action, target_type, target_id, details, ip_address)
+    # Fallback direct if needed
+    try:
+        repository.create_activity_log(
+            db, user_id, action, target_type, target_id, details, ip_address
+        )
+    except Exception:
+        pass  # already logged via core
+
+
+# ---------------------------------------------------------------------------
+# Google OAuth
+# ---------------------------------------------------------------------------
+
+def authenticate_with_google(db: Session, google_id_token: str) -> User:
+    """
+    Verify Google ID token, find or create user, and return the user.
+
+    This implements "Sign in with Google" using OAuth2 ID tokens.
+    """
+    try:
+        google_user = verify_google_token(google_id_token)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid Google token: {str(e)}",
+        )
+
+    email = google_user.get("email")
+    google_id = google_user.get("sub")  # Google's unique user ID
+
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google account has no email address.",
+        )
+
+    # Try to find existing user by email
+    user = repository.get_user_by_email(db, email)
+
+    if user:
+        # User exists — allow login (even if they originally registered with password)
+        # Optionally store google_id if not present (for future linking)
+        # For now we just log them in.
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is deactivated.",
+            )
+        return user
+
+    # New user — create account with Google
+    # No password_hash for pure Google users
+    user = repository.create_user(
+        db,
+        email=email,
+        password_hash=None,
+        role="viewer",  # default role for Google sign-ups
+    )
+
+    # You could store google_id on the user model if you extend it later.
+    return user

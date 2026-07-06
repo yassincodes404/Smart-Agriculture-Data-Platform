@@ -426,3 +426,22 @@ CREATE OR REPLACE TRIGGER after_data_sources_insert
 -- ============================================================================
 -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO agri_user;
 -- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO agri_user;
+
+-- ============================================================================
+-- 7. User Activity Logs (Admin-only visibility)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS user_activity_logs (
+    log_id        SERIAL PRIMARY KEY,
+    user_id       INT          NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    action        VARCHAR(100) NOT NULL,           -- e.g. 'login', 'create_land', 'export', 'reanalyze', 'delete_land'
+    target_type   VARCHAR(50),                     -- e.g. 'land', 'user', 'export'
+    target_id     INT,
+    details       JSONB,
+    ip_address    VARCHAR(45),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_activity_user_time ON user_activity_logs (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_action ON user_activity_logs (action, created_at DESC);
+

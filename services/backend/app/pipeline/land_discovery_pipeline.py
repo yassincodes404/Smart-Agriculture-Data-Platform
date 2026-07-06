@@ -46,13 +46,15 @@ def execute(land_id: int, db: Session) -> None:
 
         lat = float(land.latitude)
         lon = float(land.longitude)
+        
+        pipeline_errors = []
 
         # ------------------------------------------------------------------
-        # Step 1 & 2: Historical Climate, Soil Moisture, and ET0 Backfill (90 days)
+        # Step 1 & 2: Historical Climate, Soil Moisture, and ET0 Backfill (365 days)
         # ------------------------------------------------------------------
         try:
             update_progress("Step 1/6: Fetching historical climate & soil moisture...")
-            records = open_meteo.fetch_historical_climate(lat, lon, days=90)
+            records = open_meteo.fetch_historical_climate(lat, lon, days=365)
             if records:
                 ds = repository.get_or_create_data_source(db, "Open-Meteo")
                 src_id = int(ds.source_id)
@@ -107,7 +109,8 @@ def execute(land_id: int, db: Session) -> None:
 
                 logger.info("historical backfill saved land_id=%s climate=%d soil=%d water=%d",
                             land_id, count_clim, count_soil, count_water)
-        except Exception:
+        except Exception as e:
+            pipeline_errors.append("climate_data")
             logger.exception("historical climate connector failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
@@ -117,7 +120,8 @@ def execute(land_id: int, db: Session) -> None:
             update_progress("Step 2/6: Downloading visual Sentinel-2 thumbnails...")
             from app.tasks.sentinel_task import run_sentinel_visual_fetch
             run_sentinel_visual_fetch(land_id, db, update_progress=update_progress)
-        except Exception:
+        except Exception as e:
+            pipeline_errors.append("satellite_imagery")
             logger.exception("Sentinel visual task failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
@@ -132,7 +136,8 @@ def execute(land_id: int, db: Session) -> None:
             update_progress("Step 4/6: Fetching soil profile from ISRIC SoilGrids...")
             from app.tasks.soil_task import run_soil_profile_task
             run_soil_profile_task(land_id, db)
-        except Exception:
+        except Exception as e:
+            pipeline_errors.append("soil_profile")
             logger.exception("soil profile task failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
@@ -142,7 +147,8 @@ def execute(land_id: int, db: Session) -> None:
             update_progress("Step 5/6: Running ML multi-crop detection...")
             from app.tasks.crop_task import run_crop_detection_task
             run_crop_detection_task(land_id, db, days=365)
-        except Exception:
+        except Exception as e:
+            pipeline_errors.append("crop_detection")
             logger.exception("Crop detection task failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
@@ -152,19 +158,34 @@ def execute(land_id: int, db: Session) -> None:
             update_progress("Step 6/6: Generating AI insights via Groq Vision...")
             from app.ai.land_analyst import run_ai_land_analysis
             run_ai_land_analysis(land_id, db, user_id=land.user_id)
-        except Exception:
+        except Exception as e:
+            pipeline_errors.append("ai_analysis")
             logger.exception("AI analysis failed land_id=%s (continuing)", land_id)
 
         # ------------------------------------------------------------------
-        # Step 8: Mark land active
+        # Step 8: Finalize Status
         # ------------------------------------------------------------------
+        if pipeline_errors:
+            logger.error("pipeline errors for land_id=%s: %s. Deleting partially created land.", land_id, pipeline_errors)
+            from app.lands.repository import delete_land_cascading
+            delete_land_cascading(db, land_id)
+            db.commit()
+            return
+
         update_progress("active")
         db.commit()
         logger.info("land discovery completed land_id=%s", land_id)
 
-    except Exception:
+    except Exception as e:
         logger.exception("land discovery failed land_id=%s", land_id)
         db.rollback()
+        try:
+            from app.lands.repository import delete_land_cascading
+            delete_land_cascading(db, land_id)
+            db.commit()
+            logger.info("partially created land_id=%s automatically deleted", land_id)
+        except Exception:
+            db.rollback()
         raise
 
 

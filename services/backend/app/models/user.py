@@ -30,9 +30,11 @@ class User(Base):
 
     user_id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(String(255), nullable=False)
+    # password_hash can be NULL for users who only sign in with Google
+    password_hash = Column(String(255), nullable=True)
     role = Column(String(50), nullable=False, default="viewer")
     is_active = Column(Boolean, nullable=False, default=True)
+    is_deleted = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime, default=_utcnow, nullable=False)
     updated_at = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)
 
