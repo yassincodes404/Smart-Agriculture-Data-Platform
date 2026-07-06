@@ -16,6 +16,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+# Config
+from app.core.config import settings
+
 # Centralized security layer
 from app.security import SecurityHeadersMiddleware, RateLimitMiddleware
 
@@ -34,6 +37,7 @@ from app.api.crops import router as crops_router
 from app.api.soil import router as soil_router
 from app.api.ai import router as ai_router
 from app.api.activity_logs import router as activity_logs_router
+from app.api.notifications import router as notifications_router
 
 # ---------------------------------------------------------------------------
 # App initialisation
@@ -49,15 +53,20 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
-# CORS — allow React frontend (adjust origins for production)
+# CORS — configurable origins from settings (restrict in production!)
 # ---------------------------------------------------------------------------
+
+# Parse CORS_ORIGINS: empty string = allow all (dev only); else comma-separated list
+_cors_origins = [
+    o.strip() for o in settings.CORS_ORIGINS.split(",") if o.strip()
+] if settings.CORS_ORIGINS.strip() else ["*"]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],           # restrict in production
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
 # Apply centralized security middlewares
@@ -104,6 +113,7 @@ app.include_router(crops_router, prefix="/api/v1")
 app.include_router(soil_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
 app.include_router(activity_logs_router, prefix="/api/v1")
+app.include_router(notifications_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # Serve React Frontend (Single Page Application)

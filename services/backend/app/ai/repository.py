@@ -15,25 +15,36 @@ from app.models.ai_chat import AiChatSession, AiChatMessage
 from app.models.land_ai_insight import LandAiInsight
 
 
+from app.security.encryption import encrypt_string, decrypt_string
+
 # ---------------------------------------------------------------------------
 # API Key CRUD
 # ---------------------------------------------------------------------------
 
 def get_keys_for_user(db: Session, user_id: int) -> list[AiApiKey]:
-    return (
+    keys = (
         db.query(AiApiKey)
         .filter(AiApiKey.user_id == user_id)
         .order_by(AiApiKey.sort_order.asc(), AiApiKey.key_id.asc())
         .all()
     )
+    # Decrypt in memory (do not commit!)
+    for k in keys:
+        if k.api_key:
+            k.api_key = decrypt_string(k.api_key)
+    return keys
 
 
 def create_key(db: Session, user_id: int, api_key: str, label: Optional[str] = None, provider: str = "groq") -> AiApiKey:
     # Set sort_order to max + 1
     max_order = db.query(AiApiKey).filter(AiApiKey.user_id == user_id).count()
+    
+    # Encrypt the key at rest
+    encrypted_key = encrypt_string(api_key)
+    
     row = AiApiKey(
         user_id=user_id,
-        api_key=api_key,
+        api_key=encrypted_key,
         label=label,
         provider=provider,
         sort_order=max_order,
@@ -41,6 +52,9 @@ def create_key(db: Session, user_id: int, api_key: str, label: Optional[str] = N
     db.add(row)
     db.commit()
     db.refresh(row)
+    
+    # Decrypt for the returned object
+    row.api_key = decrypt_string(row.api_key)
     return row
 
 

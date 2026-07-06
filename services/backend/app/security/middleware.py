@@ -34,13 +34,28 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-XSS-Protection"] = "1; mode=block"
         # Referrer policy
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        # Basic CSP - adjust per needs
+        # HSTS — tell browsers to always use HTTPS (1 year, includeSubDomains)
+        # Note: this is safe to apply even on HTTP in dev; browsers only honour it on HTTPS responses
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        # Permissions policy — restrict powerful browser features
+        response.headers["Permissions-Policy"] = (
+            "geolocation=(self), "
+            "camera=(), "
+            "microphone=(), "
+            "payment=(), "
+            "usb=()"
+        )
+        # Tightened CSP — no unsafe-eval; allow 'unsafe-inline' only for legacy style/script bundles
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-            "style-src 'self' 'unsafe-inline'; "
-            "img-src 'self' data: https:; "
-            "connect-src 'self' http://localhost:* https://*.yourdomain.com;"
+            "script-src 'self' 'unsafe-inline' https://accounts.google.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: blob: https:; "
+            "connect-src 'self' https://api.groq.com https://nominatim.openstreetmap.org https://accounts.google.com; "
+            "frame-src 'none'; "
+            "object-src 'none'; "
+            "base-uri 'self';"
         )
 
         return response

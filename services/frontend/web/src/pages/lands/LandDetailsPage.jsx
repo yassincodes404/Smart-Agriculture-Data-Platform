@@ -25,6 +25,7 @@ import {
   updateLandSettings,
   getAiInsights,
   triggerAiAnalysis,
+  triggerAiAnalysisAsync,
   deleteLand,
   exportLand,
 } from "../../services/api";
@@ -312,28 +313,40 @@ export default function LandDetailsPage() {
       setAnalyzingLandId(id);
       setAiError(null);
       try {
-        await triggerAiAnalysis(id);
+        // Use async endpoint — returns 202 immediately; bell notification fires when done
+        await triggerAiAnalysisAsync(id);
+        addNotification({
+          type: "ai_analysis_queued",
+          severity: "low",
+          message: `AI analysis started for this land. You'll be notified when complete. ✨`,
+          land_id: id,
+        });
+        // Poll once after 4s to catch fast analyses
         setTimeout(async () => {
           try {
             const res = await getAiInsights(id);
             setAiInsights(res.insights || []);
             setAiError(null);
-          } catch (err) {
-            if (err.response?.status === 429) {
-              setAiError("AI Quota Finished. Please try again later.");
-            } else {
-              setAiError("Failed to fetch new AI Insights.");
-            }
+          } catch {
+            // Non-fatal — insights will load on next manual fetch
           } finally {
             setAnalyzingLandId(null);
           }
-        }, 3000);
+        }, 4000);
       } catch (err) {
         console.error(err);
         if (err.response?.status === 429) {
           setAiError("AI Quota Finished. Please try again later.");
         } else {
-          setAiError("Failed to trigger AI Analysis.");
+          // Fall back to synchronous analysis
+          try {
+            await triggerAiAnalysis(id);
+            const res = await getAiInsights(id);
+            setAiInsights(res.insights || []);
+            setAiError(null);
+          } catch (fallbackErr) {
+            setAiError("Failed to trigger AI Analysis.");
+          }
         }
         setAnalyzingLandId(null);
       }
@@ -666,8 +679,14 @@ export default function LandDetailsPage() {
                 className="ai-trigger-btn" 
                 onClick={handleTriggerAnalysis}
                 disabled={analyzingLandId === id || aiLoading}
+                title="Runs in background — you'll receive a bell notification when done"
               >
-                {analyzingLandId === id ? "Analyzing..." : "Generate AI Analysis"}
+                {analyzingLandId === id ? (
+                  <>
+                    <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", border: "2px solid rgba(255,255,255,0.5)", borderTopColor: "#fff", animation: "spin 0.8s linear infinite", marginRight: 6 }} />
+                    Analysis queued...
+                  </>
+                ) : "✨ Generate AI Analysis"}
               </button>
             </div>
           </div>

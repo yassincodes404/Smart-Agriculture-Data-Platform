@@ -16,6 +16,7 @@ AI endpoints:
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -72,12 +73,23 @@ def add_api_key(
     current_user: User = Depends(get_current_user),
 ):
     """Add a new Groq API key for the current user."""
-    if not body.api_key or len(body.api_key.strip()) < 8:
-        raise HTTPException(status_code=400, detail="Invalid API key format.")
+    api_key = body.api_key.strip()
+    
+    # Validate key format — Groq keys start with 'gsk_' and are at least 40 chars
+    if not api_key:
+        raise HTTPException(status_code=400, detail="API key cannot be empty.")
+    if len(api_key) < 20:
+        raise HTTPException(status_code=400, detail="API key is too short to be valid.")
+    if body.provider == "groq" and not api_key.startswith("gsk_"):
+        raise HTTPException(
+            status_code=400, 
+            detail="Groq API keys must start with 'gsk_'. Please check your key and try again."
+        )
+    
     row = ai_repo.create_key(
         db,
         user_id=current_user.user_id,
-        api_key=body.api_key.strip(),
+        api_key=api_key,
         label=body.label,
         provider=body.provider,
     )
@@ -260,3 +272,123 @@ def trigger_ai_analysis(
     if not insights:
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="AI Quota Finished or Analysis Failed.")
     return {"message": "AI analysis complete.", "insights": True}
+
+
+# ---------------------------------------------------------------------------
+# AI Status Endpoint
+# ---------------------------------------------------------------------------
+
+@router.get("/ai/status")
+def get_ai_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return AI system health status for the current user:
+    - Key pool availability
+    - Count of active/quota-exceeded keys  
+    - Last AI analysis timestamp across all user's lands
+    """
+    client = GroqClient(db, current_user.user_id)
+    keys = client.get_key_pool_status()
+    
+    active_keys = [k for k in keys if k["is_active"] and not k["quota_exceeded"]]
+    quota_exceeded_keys = [k for k in keys if k["quota_exceeded"]]
+    
+    # Find most recent AI insight across all user's lands
+    from app.models.land import Land
+    from app.models.land_ai_insight import LandAiInsight
+    
+    user_land_ids = [
+        r[0] for r in db.query(Land.land_id).filter(Land.user_id == current_user.user_id).all()
+    ]
+    
+    last_insight = None
+    if user_land_ids:
+        last = (
+            db.query(LandAiInsight)
+            .filter(LandAiInsight.land_id.in_(user_land_ids))
+            .order_by(LandAiInsight.created_at.desc())
+            .first()
+        )
+        if last:
+            last_insight = last.created_at.isoformat()
+    
+    ai_available = len(active_keys) > 0
+    
+    return {
+        "ai_available": ai_available,
+        "total_keys": len(keys),
+        "active_keys": len(active_keys),
+        "quota_exceeded_keys": len(quota_exceeded_keys),
+        "last_analysis_at": last_insight,
+        "status": "ready" if ai_available else ("quota_exceeded" if keys else "no_keys"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Async AI Analysis (background task + notification)
+# ---------------------------------------------------------------------------
+
+def _run_analysis_background(
+    land_id: int,
+    user_id: int,
+    land_public_id: str,
+    db: Session,
+) -> None:
+    """
+    Background worker: runs AI analysis and creates a LandAlert notification
+    when complete so the frontend bell rings.
+    """
+    try:
+        insights = run_ai_land_analysis(land_id=land_id, db=db, user_id=user_id)
+        
+        # Create completion notification
+        from app.models.land_alert import LandAlert
+        if insights:
+            alert = LandAlert(
+                land_id=land_id,
+                user_id=user_id,
+                alert_type="ai_analysis_complete",
+                severity="low",
+                message=f"AI analysis complete: {len(insights)} fresh insights generated.",
+                payload={"insight_count": len(insights), "public_id": land_public_id},
+                is_read=False,
+            )
+        else:
+            alert = LandAlert(
+                land_id=land_id,
+                user_id=user_id,
+                alert_type="ai_analysis_failed",
+                severity="medium",
+                message="AI analysis could not complete. Check your API key pool.",
+                payload={"public_id": land_public_id},
+                is_read=False,
+            )
+        db.add(alert)
+        db.commit()
+    except Exception as exc:
+        logger.exception("Background AI analysis failed for land_id=%s: %s", land_id, exc)
+
+
+@router.post("/ai/lands/{public_id}/analyze-async", status_code=status.HTTP_202_ACCEPTED)
+def trigger_ai_analysis_async(
+    public_id: str,
+    background_tasks: BackgroundTasks,
+    land = Depends(require_land_access),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Trigger AI analysis in the background.
+    Returns immediately with 202 Accepted.
+    A LandAlert notification is created when complete (visible in bell).
+    """
+    background_tasks.add_task(
+        _run_analysis_background,
+        land_id=land.land_id,
+        user_id=current_user.user_id,
+        land_public_id=public_id,
+        db=db,
+    )
+    return {"message": "AI analysis started in background. You will be notified when complete.", "status": "accepted"}

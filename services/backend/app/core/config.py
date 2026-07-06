@@ -22,10 +22,24 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Security — API key encryption at rest (Fernet symmetric)
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # IMPORTANT: Set this in .env.backend in production — never use the default!
+    ENCRYPTION_KEY: str = "HZxV7QmRx6NfBz3kYvP9CG1oTqLU5WwD4JdAeI2nMs0="
+
+    # CORS — comma-separated list of allowed origins (empty = allow all, dev only!)
+    # Example: "http://localhost:5173,https://yourapp.com"
+    CORS_ORIGINS: str = ""
+
     # External services
     OPENAI_API_KEY: str = ""
     LOG_LEVEL: str = "INFO"
     LAND_MONITOR_INTERVAL_MINUTES: int = 1440
+
+    # AI — auto-analyze interval for the scheduler (hours between stale insight refresh)
+    AI_AUTO_ANALYZE_HOURS: int = 6
+    # AI insights are considered stale after this many hours
+    AI_INSIGHT_STALE_HOURS: int = 24
 
     # Sentinel-2 / Copernicus Data Space
     COPERNICUS_CLIENT_ID: str = ""

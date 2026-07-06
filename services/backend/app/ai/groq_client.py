@@ -22,6 +22,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models.ai_settings import AiApiKey
+from app.security.encryption import decrypt_string
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +93,10 @@ class GroqClient:
             .order_by(AiApiKey.sort_order.asc())
             .all()
         )
-        return [
-            {
+        result = []
+        for k in keys:
+            decrypted = decrypt_string(k.api_key) if k.api_key else ""
+            result.append({
                 "key_id": k.key_id,
                 "label": k.label or f"Key #{k.key_id}",
                 "provider": k.provider,
@@ -101,11 +104,9 @@ class GroqClient:
                 "quota_exceeded": k.quota_exceeded,
                 "quota_reset_at": k.quota_reset_at.isoformat() if k.quota_reset_at else None,
                 "sort_order": k.sort_order,
-                # Never expose the full key — show masked version only
-                "key_preview": f"...{k.api_key[-6:]}" if len(k.api_key) > 6 else "******",
-            }
-            for k in keys
-        ]
+                "key_preview": f"...{decrypted[-6:]}" if len(decrypted) > 6 else "******",
+            })
+        return result
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -133,8 +134,15 @@ class GroqClient:
                     k.quota_reset_at = None
                     self.db.add(k)
                     self.db.flush()
+                    
+                    # Decrypt key for usage
+                    if k.api_key:
+                        k.api_key = decrypt_string(k.api_key)
                     available.append(k)
             else:
+                # Decrypt key for usage
+                if k.api_key:
+                    k.api_key = decrypt_string(k.api_key)
                 available.append(k)
 
         return available

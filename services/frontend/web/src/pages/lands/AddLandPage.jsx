@@ -14,12 +14,52 @@
  * Plan:    documents/Frontend/08_Map_and_Satellite_Integration_Plan.md §1
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { discoverLand } from "../../services/api";
 import { useNotifications } from "../../context/NotificationContext";
 import MapDrawComponent from "../../components/map/MapDrawComponent";
 import "../Lands.css";
+
+// ---------------------------------------------------------------------------
+// Reverse geocode using OpenStreetMap Nominatim (free, no key needed)
+// ---------------------------------------------------------------------------
+async function reverseGeocode(lat, lng) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`;
+    const res = await fetch(url, {
+      headers: { "Accept-Language": "en", "User-Agent": "SmartAgriPlatform/1.0" },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+// Suggest crop based on Egyptian governorate names (extends for any location)
+function suggestCropFromLocation(geocode) {
+  const addr = geocode?.address || {};
+  const region = [
+    addr.state, addr.county, addr.city, addr.village, addr.town, addr.suburb,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  if (!region) return null;
+
+  if (region.match(/delta|kafr|damietta|beheira|sharqia|menofia|dakahlia|gharbia/)) {
+    return "Rice, Cotton, or Vegetables";
+  }
+  if (region.match(/fayoum|beni suef|minya|asyut|sohag|qena|luxor/)) {
+    return "Sugarcane, Wheat, or Clover";
+  }
+  if (region.match(/aswan|red sea|sinai|matrouh/)) {
+    return "Date Palm or Olive";
+  }
+  if (region.match(/giza|cairo|Alexandria|ismailia/)) {
+    return "Vegetables or Citrus";
+  }
+  return null;
+}
 
 export default function AddLandPage() {
   const navigate = useNavigate();
@@ -33,16 +73,61 @@ export default function AddLandPage() {
   const [geometry, setGeometry] = useState(null);
   const [shapeStats, setShapeStats] = useState(null);
 
+  /* ── AI auto-fill state ───────────────────────────────────────── */
+  const [aiSuggestion, setAiSuggestion] = useState(null); // { name, description, cropHint }
+  const [aiAutoFilling, setAiAutoFilling] = useState(false);
+  const [aiDismissed, setAiDismissed] = useState(false);
+  const userEditedName = useRef(false);
+  const userEditedDesc = useRef(false);
+
   /* ── Submission state ───────────────────────────────────────── */
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [phase, setPhase] = useState(null); // "submitting" | "analyzing" | "done"
 
-  /* ── Map callback ───────────────────────────────────────────── */
-  const handleGeometryChange = useCallback((geojson, stats) => {
+  /* ── Map callback + AI auto-fill ───────────────────────────────── */
+  const handleGeometryChange = useCallback(async (geojson, stats) => {
     setGeometry(geojson);
     setShapeStats(stats);
     setError(null);
+    setAiDismissed(false);
+
+    // Trigger AI auto-fill using the centroid coordinates
+    if (stats?.center) {
+      const [lat, lng] = stats.center;
+      setAiAutoFilling(true);
+      try {
+        const geo = await reverseGeocode(lat, lng);
+        if (geo) {
+          const addr = geo.address || {};
+          const parts = [
+            addr.village || addr.hamlet || addr.suburb || addr.city_district,
+            addr.city || addr.town || addr.county,
+            addr.state,
+            addr.country,
+          ].filter(Boolean);
+
+          const locationName = parts[0] || parts[1] || "Farm";
+          const suggestedName = `${locationName} Farm`;
+          const cropHint = suggestCropFromLocation(geo);
+          const suggestedDesc = [
+            parts.slice(0, 3).join(", "),
+            stats.areaApprox ? `Approx. ${stats.areaApprox} ha` : null,
+            cropHint ? `Typical crops: ${cropHint}` : null,
+          ].filter(Boolean).join(" • ");
+
+          setAiSuggestion({ name: suggestedName, description: suggestedDesc, cropHint });
+
+          // Only auto-fill if user hasn't typed their own values
+          if (!userEditedName.current) setName(suggestedName);
+          if (!userEditedDesc.current) setDescription(suggestedDesc);
+        }
+      } catch {
+        // Non-fatal
+      } finally {
+        setAiAutoFilling(false);
+      }
+    }
   }, []);
 
   /* ── Submit ─────────────────────────────────────────────────── */
@@ -183,11 +268,42 @@ export default function AddLandPage() {
                   className="input-field"
                   placeholder="e.g., Nile Delta - Plot A"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => { userEditedName.current = true; setName(e.target.value); }}
                   required
                   disabled={loading}
                 />
               </div>
+              {/* AI auto-fill indicator */}
+              {aiAutoFilling && (
+                <div style={{ fontSize: 11, color: "var(--brand-primary)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ display: "inline-block", width: 10, height: 10, borderRadius: "50%", border: "2px solid var(--brand-primary)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+                  AI filling from location...
+                </div>
+              )}
+              {aiSuggestion && !aiDismissed && !aiAutoFilling && (
+                <div style={{
+                  marginTop: 6,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  background: "linear-gradient(135deg, rgba(124,58,237,0.08), rgba(34,197,94,0.06))",
+                  border: "1px solid rgba(124,58,237,0.2)",
+                  borderRadius: 8,
+                  padding: "6px 10px",
+                  fontSize: 11,
+                }}>
+                  <span style={{ fontSize: 14 }}>✨</span>
+                  <span style={{ color: "#7c3aed", fontWeight: 600, flex: 1 }}>
+                    AI suggested from location · {aiSuggestion.cropHint ? `Crop hint: ${aiSuggestion.cropHint}` : "Edit to customize"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setAiDismissed(true)}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--text-secondary)", padding: 0 }}
+                    title="Dismiss AI suggestion"
+                  >✕</button>
+                </div>
+              )}
             </div>
 
             {/* Description */}
@@ -201,7 +317,7 @@ export default function AddLandPage() {
                   className="input-field input-field--no-icon"
                   placeholder="Describe this land plot — crop type, irrigation source, nearby landmarks..."
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  onChange={(e) => { userEditedDesc.current = true; setDescription(e.target.value); }}
                   disabled={loading}
                   style={{ height: 110, padding: 14, resize: "vertical" }}
                 />

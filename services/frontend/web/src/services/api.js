@@ -345,7 +345,31 @@ export async function getNdviComparison(landId, weeks = 8) {
  * Returns recent alerts for the notification bell. Uses LandAlert system.
  */
 export async function listNotifications(limit = 10) {
-  return request(`/lands/notifications?limit=${limit}`);
+  return request(`/notifications?limit=${limit}`);
+}
+
+/**
+ * GET /api/v1/notifications/unread-count
+ * Returns just the unread badge count (fast poll endpoint).
+ */
+export async function getUnreadNotificationCount() {
+  return request("/notifications/unread-count");
+}
+
+/**
+ * PATCH /api/v1/notifications/{id}/read
+ * Mark a single notification as read.
+ */
+export async function markNotificationRead(alertId) {
+  return request(`/notifications/${alertId}/read`, { method: "PATCH" });
+}
+
+/**
+ * POST /api/v1/notifications/read-all
+ * Mark all notifications as read for the current user.
+ */
+export async function markAllNotificationsRead() {
+  return request("/notifications/read-all", { method: "POST" });
 }
 
 /* ----------------------------------------------------------------
@@ -486,7 +510,17 @@ export async function getAiInsights(landId) {
   return request(`/ai/lands/${landId}/insights`);
 }
 
-/** POST /ai/lands/{land_id}/analyze — trigger fresh AI analysis */
+/** POST /ai/lands/{land_id}/analyze — trigger fresh AI analysis (synchronous) */
 export async function triggerAiAnalysis(landId) {
   return request(`/ai/lands/${landId}/analyze`, { method: "POST" });
+}
+
+/** POST /ai/lands/{land_id}/analyze-async — trigger background AI analysis (returns 202) */
+export async function triggerAiAnalysisAsync(landId) {
+  return request(`/ai/lands/${landId}/analyze-async`, { method: "POST" });
+}
+
+/** GET /ai/status — AI system health for current user */
+export async function getAiStatus() {
+  return request("/ai/status");
 }
