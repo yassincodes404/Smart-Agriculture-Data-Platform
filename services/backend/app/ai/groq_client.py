@@ -200,8 +200,20 @@ class GroqClient:
                 return None
                 
             if resp.status_code == 400:
+                try:
+                    error_code = resp.json().get("error", {}).get("code")
+                    if error_code in ("organization_restricted", "invalid_api_key"):
+                        logger.warning("Groq key_id=%s is restricted or invalid.", key_row.key_id)
+                        key_row.is_active = False
+                        key_row.label = (key_row.label or "") + " [RESTRICTED]"
+                        self.db.add(key_row)
+                        self.db.flush()
+                        return None
+                except Exception:
+                    pass
+
                 # Application error (e.g. bad payload, model unavailable, context too large)
-                # DO NOT deactivate the key for this.
+                # DO NOT deactivate the key for this unless it's a known restriction.
                 logger.error(
                     "Groq key_id=%s returned 400 Bad Request: %s",
                     key_row.key_id, resp.text[:500],

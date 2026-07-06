@@ -345,7 +345,8 @@ export default function LandDetailsPage() {
             setAiInsights(res.insights || []);
             setAiError(null);
           } catch (fallbackErr) {
-            setAiError("Failed to trigger AI Analysis.");
+            const detail = fallbackErr.response?.data?.detail || "Failed to trigger AI Analysis.";
+            setAiError(detail);
           }
         }
         setAnalyzingLandId(null);

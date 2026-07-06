@@ -270,7 +270,20 @@ def trigger_ai_analysis(
     """Trigger a fresh AI analysis for a land synchronously."""
     insights = run_ai_land_analysis(land_id=land.land_id, db=db, user_id=current_user.user_id)
     if not insights:
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="AI Quota Finished or Analysis Failed.")
+        # Check if they have active keys to give a better error message
+        client = GroqClient(db, current_user.user_id)
+        keys = client.get_key_pool_status()
+        active_keys = [k for k in keys if k["is_active"] and not k["quota_exceeded"]]
+        
+        if not keys:
+            detail = "No AI API keys configured. Please add one in Settings."
+        elif not active_keys:
+            detail = "All AI API keys are currently restricted, invalid, or have exceeded their quota. Please check your AI Settings."
+        else:
+            detail = "AI analysis failed or returned no insights. The data might be insufficient."
+            
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail=detail)
+        
     return {"message": "AI analysis complete.", "insights": True}
 
 
