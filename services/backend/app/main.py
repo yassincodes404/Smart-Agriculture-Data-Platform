@@ -95,12 +95,21 @@ def create_tables() -> None:
         Base.metadata.create_all(bind=engine)
         
         # Patch the database to ensure Google OAuth can insert users without passwords
+        # Also add any missing columns that were added to the model after the initial deployment
         from sqlalchemy import text
         with engine.begin() as conn:
-            try:
-                conn.execute(text("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL"))
-            except Exception:
-                pass
+            migrations = [
+                "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()",
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()",
+            ]
+            for sql in migrations:
+                try:
+                    conn.execute(text(sql))
+                except Exception:
+                    pass
+
         
         # Patch invalid admin hashes in the deployed database
         with Session(engine) as session:
