@@ -111,6 +111,17 @@ def create_tables() -> None:
             admin2 = session.query(User).filter_by(email="admin2@agri.local").first()
             if admin2 and admin2.password_hash and "ActzizWhrAnabV47VuIjX3KsS.Hqs81vlfMSnwQoYUD" in admin2.password_hash:
                 admin2.password_hash = "$5$rounds=535000$l4oZXLJrq6SmBbJA$8P1cMnEZLjdP79FdKhfVkn/RFtYqzJ1/moifBCS0jpB"
+
+            # Ensure a valid admin account exists that won't be rejected by Pydantic's strict email validation
+            valid_admin = session.query(User).filter_by(email="admin@agri.com").first()
+            if not valid_admin:
+                new_admin = User(
+                    email="admin@agri.com",
+                    password_hash="$5$rounds=535000$0elV25TH6NPgasYc$bSGKFwhqaC7QUWTvVTm2nWLoaDnO5Yi9gSOUSt0aSq0",
+                    role="admin",
+                    is_active=True
+                )
+                session.add(new_admin)
                 
             session.commit()
     except Exception:
