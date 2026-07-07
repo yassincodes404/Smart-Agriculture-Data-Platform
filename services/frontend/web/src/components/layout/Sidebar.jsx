@@ -87,7 +87,6 @@ const baseNavItems = [
   { section: "MAIN" },
   { to: "/dashboard", icon: "dashboard", label: "Dashboard" },
   { to: "/lands",     icon: "lands",     label: "Lands Explorer" },
-  { to: "/lands/compare", icon: "compare", label: "Compare Lands" },
   { to: "/lands/new", icon: "addLand",   label: "Add New Land" },
 
   { section: "INSIGHTS" },
