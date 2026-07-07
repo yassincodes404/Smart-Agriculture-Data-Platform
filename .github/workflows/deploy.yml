@@ -7,8 +7,9 @@ on:
       - feature/excel-export
 
 env:
-  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/smart-agriculture-data-platform
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+  DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || secrets.DOCKER_USERNAME }}
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME || secrets.DOCKER_USERNAME }}/smart-agriculture-data-platform
 
 jobs:
   # -----------------------------------------------------------------------
