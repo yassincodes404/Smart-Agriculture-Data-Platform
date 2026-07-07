@@ -17,7 +17,7 @@ router = APIRouter(prefix="/activity-logs", tags=["Activity Logs (Admin)"])
 
 
 @router.get(
-    "/",
+    "",
     summary="List user activity logs (admin only)",
 )
 def list_activity_logs(
