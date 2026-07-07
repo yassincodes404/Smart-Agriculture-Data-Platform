@@ -135,14 +135,8 @@ class GroqClient:
                     self.db.add(k)
                     self.db.flush()
                     
-                    # Decrypt key for usage
-                    if k.api_key:
-                        k.api_key = decrypt_string(k.api_key)
                     available.append(k)
             else:
-                # Decrypt key for usage
-                if k.api_key:
-                    k.api_key = decrypt_string(k.api_key)
                 available.append(k)
 
         return available
@@ -159,8 +153,9 @@ class GroqClient:
         Attempt a request with a specific API key.
         Marks the key as quota-exceeded on 429/401 and returns None so the caller retries.
         """
+        plain_key = decrypt_string(key_row.api_key) if key_row.api_key else ""
         headers = {
-            "Authorization": f"Bearer {key_row.api_key}",
+            "Authorization": f"Bearer {plain_key}",
             "Content-Type": "application/json",
         }
         payload = {
