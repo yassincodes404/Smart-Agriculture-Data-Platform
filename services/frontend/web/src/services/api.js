@@ -112,6 +112,10 @@ async function request(endpoint, options = {}) {
       headers,
     });
 
+    if (response.status === 204 || response.status === 205) {
+      return null;
+    }
+
     let data;
     try {
       data = await response.json();
