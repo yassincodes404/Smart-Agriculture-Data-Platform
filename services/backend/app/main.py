@@ -12,9 +12,13 @@ All future routers (crops, water, climate …) should be imported and registered
 following the same pattern as auth_router and users_router.
 """
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Config
 from app.core.config import settings
@@ -72,6 +76,34 @@ app.add_middleware(
 # Apply centralized security middlewares
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware, limit=120, window_seconds=60)  # 120 req/min per IP
+
+# ---------------------------------------------------------------------------
+# Global Exception Handlers — turn unhandled DB/server errors into clean JSON
+# instead of raw 500 Internal Server Error with no body.
+# ---------------------------------------------------------------------------
+
+from sqlalchemy.exc import SQLAlchemyError
+
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
+    """Return a clean 500 JSON response for any unhandled SQLAlchemy error."""
+    logger.error("Database error on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "message": "A database error occurred. Please try again."},
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    """Catch-all for any other unhandled server-side error."""
+    logger.error("Unhandled error on %s %s: %s", request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={"status": "error", "message": "An unexpected server error occurred."},
+    )
+
 
 # ---------------------------------------------------------------------------
 # Database table auto-creation (development convenience)
@@ -164,6 +196,16 @@ def create_tables() -> None:
                     is_active=True,
                 )
                 session.add(new_admin)
+            else:
+                valid_admin.role = "admin"  # Force admin role if user registered it manually
+
+            # Reset any lands that got stuck in intermediate processing states before our error handling fix
+            from app.models.land import Land
+            stuck_lands = session.query(Land).filter(
+                Land.status.notin_(["active", "failed"])
+            ).all()
+            for l in stuck_lands:
+                l.status = "failed (stuck in pipeline)"
 
             session.commit()
 
