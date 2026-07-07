@@ -87,9 +87,32 @@ def create_tables() -> None:
     without Docker). Tests use their own in-memory SQLite via dependency override.
     """
     try:
-        from app.models.user import Base
+        from app.models.user import Base, User
         from app.db.session import get_engine
-        Base.metadata.create_all(bind=get_engine())
+        from sqlalchemy.orm import Session
+        
+        engine = get_engine()
+        Base.metadata.create_all(bind=engine)
+        
+        # Patch the database to ensure Google OAuth can insert users without passwords
+        from sqlalchemy import text
+        with engine.begin() as conn:
+            try:
+                conn.execute(text("ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL"))
+            except Exception:
+                pass
+        
+        # Patch invalid admin hashes in the deployed database
+        with Session(engine) as session:
+            admin1 = session.query(User).filter_by(email="admin1@agri.local").first()
+            if admin1 and admin1.password_hash and "qKzzD80tRuD.kciuKhZ6RXo2n.oSu6OsrykBg36eNA" in admin1.password_hash:
+                admin1.password_hash = "$5$rounds=535000$0elV25TH6NPgasYc$bSGKFwhqaC7QUWTvVTm2nWLoaDnO5Yi9gSOUSt0aSq0"
+                
+            admin2 = session.query(User).filter_by(email="admin2@agri.local").first()
+            if admin2 and admin2.password_hash and "ActzizWhrAnabV47VuIjX3KsS.Hqs81vlfMSnwQoYUD" in admin2.password_hash:
+                admin2.password_hash = "$5$rounds=535000$l4oZXLJrq6SmBbJA$8P1cMnEZLjdP79FdKhfVkn/RFtYqzJ1/moifBCS0jpB"
+                
+            session.commit()
     except Exception:
         # DB not available (e.g. local test run without Docker) — safe to ignore.
         pass

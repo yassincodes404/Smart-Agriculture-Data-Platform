@@ -14,12 +14,12 @@ INSERT INTO test_connection (status) VALUES ('Database Operational');
 
 INSERT INTO users (email, password_hash, role) VALUES (
   'admin1@agri.local',
-  '$5$rounds=535000$qPXMKmi1sSAFFUxr$qKzzD80tRuD.kciuKhZ6RXo2n.oSu6OsrykBg36eNA.',
+  '$5$rounds=535000$0elV25TH6NPgasYc$bSGKFwhqaC7QUWTvVTm2nWLoaDnO5Yi9gSOUSt0aSq0',
   'admin'
 ) ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO users (email, password_hash, role) VALUES (
   'admin2@agri.local',
-  '$5$rounds=535000$LgcRSxDTi/9GQKHV$ActzizWhrAnabV47VuIjX3KsS.Hqs81vlfMSnwQoYUD',
+  '$5$rounds=535000$l4oZXLJrq6SmBbJA$8P1cMnEZLjdP79FdKhfVkn/RFtYqzJ1/moifBCS0jpB',
   'admin'
 ) ON CONFLICT (email) DO NOTHING;
