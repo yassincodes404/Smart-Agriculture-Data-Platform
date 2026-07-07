@@ -50,8 +50,9 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash VARCHAR(255),
     role          VARCHAR(50)  NOT NULL DEFAULT 'viewer',
     is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    is_deleted    BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users (email);
@@ -118,17 +119,20 @@ CREATE TABLE IF NOT EXISTS water_records (
 
 CREATE TABLE IF NOT EXISTS lands (
     land_id                  SERIAL PRIMARY KEY,
-    user_id                  INT          NULL REFERENCES users(user_id),
-    name                     VARCHAR(255) NOT NULL,
+    public_id                UUID          NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+    user_id                  INT           NULL REFERENCES users(user_id),
+    name                     VARCHAR(255)  NOT NULL,
     latitude                 DECIMAL(10,8) NOT NULL,
     longitude                DECIMAL(11,8) NOT NULL,
     boundary_polygon         JSONB         NULL,
     area_hectares            DECIMAL(10,4) NULL,
     description              TEXT          NULL,
     status                   VARCHAR(128)  NOT NULL DEFAULT 'processing',
-    monitoring_interval_days INT           DEFAULT 7,
-    created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    monitoring_interval_days INT           NOT NULL DEFAULT 7,
+    is_deleted               BOOLEAN       NOT NULL DEFAULT FALSE,
+    metadata_                JSONB         NULL DEFAULT '{}',
+    created_at               TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP,
+    updated_at               TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_lands_status  ON lands (status);
@@ -145,12 +149,12 @@ CREATE OR REPLACE TRIGGER trg_lands_updated_at
 CREATE TABLE IF NOT EXISTS land_climate (
     id                  SERIAL PRIMARY KEY,
     land_id             INT           NOT NULL REFERENCES lands(land_id) ON DELETE CASCADE,
-    timestamp           TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+    timestamp           TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP,
     temperature_celsius DECIMAL(10,4) NULL,
     humidity_pct        DECIMAL(10,4) NULL,
     rainfall_mm         DECIMAL(10,4) NULL,
-    source_id           INT           NOT NULL REFERENCES data_sources(source_id),
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    source_id           INT           NULL REFERENCES data_sources(source_id),
+    created_at          TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_land_climate_land_time ON land_climate (land_id, timestamp);
@@ -158,13 +162,13 @@ CREATE INDEX IF NOT EXISTS idx_land_climate_land_time ON land_climate (land_id, 
 CREATE TABLE IF NOT EXISTS land_water (
     id                            SERIAL PRIMARY KEY,
     land_id                       INT           NOT NULL REFERENCES lands(land_id) ON DELETE CASCADE,
-    timestamp                     TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+    timestamp                     TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP,
     estimated_water_usage_liters  DECIMAL(14,4) NULL,
     irrigation_status             VARCHAR(100)  NULL,
     crop_water_requirement_mm     DECIMAL(10,4) NULL,
     water_efficiency_ratio        DECIMAL(10,4) NULL,
-    source_id                     INT           NOT NULL REFERENCES data_sources(source_id),
-    created_at                    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    source_id                     INT           NULL REFERENCES data_sources(source_id),
+    created_at                    TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_land_water_land_time ON land_water (land_id, timestamp);
@@ -194,7 +198,7 @@ CREATE OR REPLACE TRIGGER trg_crop_zones_last_updated
 CREATE TABLE IF NOT EXISTS land_crops (
     id                   SERIAL PRIMARY KEY,
     land_id              INT           NOT NULL REFERENCES lands(land_id) ON DELETE CASCADE,
-    timestamp            TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+    timestamp            TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP,
     crop_type            VARCHAR(100)  NULL,
     ndvi_value           DECIMAL(10,4) NULL,
     dvi_value            DECIMAL(10,4) NULL,
@@ -207,8 +211,8 @@ CREATE TABLE IF NOT EXISTS land_crops (
     ndvi_trend           VARCHAR(20)   NULL,
     confidence           DECIMAL(5,4)  NULL,
     zone_id              INT           NULL REFERENCES crop_zones(zone_id) ON DELETE SET NULL,
-    source_id            INT           NOT NULL REFERENCES data_sources(source_id),
-    created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    source_id            INT           NULL REFERENCES data_sources(source_id),
+    created_at           TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_land_crops_land_time ON land_crops (land_id, timestamp);
@@ -216,14 +220,14 @@ CREATE INDEX IF NOT EXISTS idx_land_crops_land_time ON land_crops (land_id, time
 CREATE TABLE IF NOT EXISTS land_soil (
     id                  SERIAL PRIMARY KEY,
     land_id             INT           NOT NULL REFERENCES lands(land_id) ON DELETE CASCADE,
-    timestamp           TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+    timestamp           TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP,
     moisture_pct        DECIMAL(10,4) NULL,
     soil_type           VARCHAR(100)  NULL,
     ph_level            DECIMAL(5,2)  NULL,
     organic_matter_pct  DECIMAL(5,2)  NULL,
     suitability_score   DECIMAL(5,2)  NULL,
-    source_id           INT           NOT NULL REFERENCES data_sources(source_id),
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    source_id           INT           NULL REFERENCES data_sources(source_id),
+    created_at          TIMESTAMPTZ   DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_land_soil_land_time ON land_soil (land_id, timestamp);
@@ -231,14 +235,14 @@ CREATE INDEX IF NOT EXISTS idx_land_soil_land_time ON land_soil (land_id, timest
 CREATE TABLE IF NOT EXISTS land_images (
     id                  SERIAL PRIMARY KEY,
     land_id             INT          NOT NULL REFERENCES lands(land_id) ON DELETE CASCADE,
-    timestamp           TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    timestamp           TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
     image_data          BYTEA        NOT NULL,
     image_type          VARCHAR(100) NOT NULL,
     cv_analysis_summary JSONB        NULL,
     ndvi_mean           DECIMAL(6,4) NULL,
     cloud_cover_pct     DECIMAL(5,2) NULL,
-    source_id           INT          NOT NULL REFERENCES data_sources(source_id),
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    source_id           INT          NULL REFERENCES data_sources(source_id),
+    created_at          TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_land_images_land_time ON land_images (land_id, timestamp);
@@ -272,14 +276,16 @@ CREATE INDEX IF NOT EXISTS idx_land_ai_insights_land_created ON land_ai_insights
 CREATE TABLE IF NOT EXISTS land_alerts (
     id          SERIAL PRIMARY KEY,
     land_id     INT          NOT NULL REFERENCES lands(land_id) ON DELETE CASCADE,
-    timestamp   TIMESTAMP    DEFAULT CURRENT_TIMESTAMP,
+    user_id     INT          NULL REFERENCES users(user_id),
+    timestamp   TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP,
     alert_type  VARCHAR(100) NOT NULL,
     severity    VARCHAR(20)  NOT NULL,
     message     TEXT         NOT NULL,
     payload     JSONB        NULL,
-    resolved_at TIMESTAMP    NULL,
-    source_id   INT          NOT NULL REFERENCES data_sources(source_id),
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    resolved_at TIMESTAMPTZ  NULL,
+    is_read     BOOLEAN      NOT NULL DEFAULT FALSE,
+    source_id   INT          NULL REFERENCES data_sources(source_id),
+    created_at  TIMESTAMPTZ  DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_land_alerts_land_time ON land_alerts (land_id, timestamp);

@@ -90,52 +90,87 @@ def create_tables() -> None:
         from app.models.user import Base, User
         from app.db.session import get_engine
         from sqlalchemy.orm import Session
-        
+        from sqlalchemy import text
+
         engine = get_engine()
         Base.metadata.create_all(bind=engine)
-        
-        # Patch the database to ensure Google OAuth can insert users without passwords
-        # Also add any missing columns that were added to the model after the initial deployment
-        from sqlalchemy import text
+
+        # ---------------------------------------------------------------------------
+        # Schema Migration: add every column that exists in the ORM model but may
+        # be missing from the live Azure database (created from an older init.sql).
+        # Each statement is wrapped individually so one failure doesn't block others.
+        # ---------------------------------------------------------------------------
+        migrations = [
+            # --- users ---
+            "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()",
+
+            # --- lands ---
+            "ALTER TABLE lands ADD COLUMN IF NOT EXISTS public_id UUID DEFAULT gen_random_uuid() UNIQUE",
+            "ALTER TABLE lands ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE",
+            "ALTER TABLE lands ADD COLUMN IF NOT EXISTS metadata_ JSONB DEFAULT '{}'",
+            "ALTER TABLE lands ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()",
+            "ALTER TABLE lands ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()",
+            # Make source_id columns nullable (models changed them from NOT NULL)
+            "ALTER TABLE land_climate ALTER COLUMN source_id DROP NOT NULL",
+            "ALTER TABLE land_water ALTER COLUMN source_id DROP NOT NULL",
+            "ALTER TABLE land_crops ALTER COLUMN source_id DROP NOT NULL",
+            "ALTER TABLE land_soil ALTER COLUMN source_id DROP NOT NULL",
+            "ALTER TABLE land_images ALTER COLUMN source_id DROP NOT NULL",
+            "ALTER TABLE land_alerts ALTER COLUMN source_id DROP NOT NULL",
+            "ALTER TABLE analytics_summaries ALTER COLUMN source_id DROP NOT NULL",
+
+            # --- land_alerts ---
+            "ALTER TABLE land_alerts ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(user_id)",
+            "ALTER TABLE land_alerts ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE",
+
+            # --- land_crops (created_at was added later) ---
+            "ALTER TABLE land_crops ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()",
+
+            # --- land_images (source_id nullable already handled above) ---
+            "ALTER TABLE land_images ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()",
+        ]
+
         with engine.begin() as conn:
-            migrations = [
-                "ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()",
-                "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()",
-            ]
             for sql in migrations:
                 try:
                     conn.execute(text(sql))
                 except Exception:
-                    pass
+                    pass  # Column may already exist — safe to ignore
 
-        
-        # Patch invalid admin hashes in the deployed database
+        # ---------------------------------------------------------------------------
+        # Data Migration: fix admin accounts in the deployed database
+        # ---------------------------------------------------------------------------
         with Session(engine) as session:
+            # Fix corrupted hashes from original seed
             admin1 = session.query(User).filter_by(email="admin1@agri.local").first()
-            if admin1 and admin1.password_hash and "qKzzD80tRuD.kciuKhZ6RXo2n.oSu6OsrykBg36eNA" in admin1.password_hash:
+            if admin1 and admin1.password_hash and "qKzzD80tRuD" in admin1.password_hash:
                 admin1.password_hash = "$5$rounds=535000$0elV25TH6NPgasYc$bSGKFwhqaC7QUWTvVTm2nWLoaDnO5Yi9gSOUSt0aSq0"
-                
+
             admin2 = session.query(User).filter_by(email="admin2@agri.local").first()
-            if admin2 and admin2.password_hash and "ActzizWhrAnabV47VuIjX3KsS.Hqs81vlfMSnwQoYUD" in admin2.password_hash:
+            if admin2 and admin2.password_hash and "ActzizWhrAnabV47VuIjX3KsS" in admin2.password_hash:
                 admin2.password_hash = "$5$rounds=535000$l4oZXLJrq6SmBbJA$8P1cMnEZLjdP79FdKhfVkn/RFtYqzJ1/moifBCS0jpB"
 
-            # Ensure a valid admin account exists that won't be rejected by Pydantic's strict email validation
+            # Ensure a working admin account exists (admin1@agri.local is rejected by strict
+            # email validation because .local is a reserved TLD)
             valid_admin = session.query(User).filter_by(email="admin@agri.com").first()
             if not valid_admin:
                 new_admin = User(
                     email="admin@agri.com",
                     password_hash="$5$rounds=535000$0elV25TH6NPgasYc$bSGKFwhqaC7QUWTvVTm2nWLoaDnO5Yi9gSOUSt0aSq0",
                     role="admin",
-                    is_active=True
+                    is_active=True,
                 )
                 session.add(new_admin)
-                
+
             session.commit()
+
     except Exception:
         # DB not available (e.g. local test run without Docker) — safe to ignore.
         pass
+
 
 
 # ---------------------------------------------------------------------------
