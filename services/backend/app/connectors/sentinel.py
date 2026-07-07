@@ -241,10 +241,9 @@ def fetch_sentinel_timeseries(bbox: list[float], days: int = 90, update_progress
     # Compute the dataset (download happens here)
     ds = ds.compute()
     
-    # --- DATA ENGINEERING ENHANCEMENT ---
     # Save the raw multi-spectral data to disk for Data Scientists before extracting NumPy arrays.
     import os
-    save_dir = "/app/data/raw/sentinel2"
+    save_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "sentinel2")
     os.makedirs(save_dir, exist_ok=True)
     try:
         # Create a unique filename based on the bbox and current date

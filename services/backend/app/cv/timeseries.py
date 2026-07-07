@@ -12,6 +12,9 @@ def extract_timeseries_features(ts_array: np.ndarray, dates: list) -> dict:
 
     # Apply spatial-temporal smoothing before feature extraction
     clean_ts = smooth_spatial_timeseries(ts_array, method="savgol", window=5)
+    
+    # Safely handle completely cloudy pixels (all-NaNs) by filling with 0.0
+    clean_ts = np.nan_to_num(clean_ts, nan=0.0)
 
     # Basic stats
     v_max = np.max(clean_ts, axis=0)
