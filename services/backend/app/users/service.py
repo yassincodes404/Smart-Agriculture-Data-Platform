@@ -76,7 +76,7 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password.",
-            headers={"WWW-Authenticate": "Bearer"},
+            headers={"WWW-Authenticator": "Bearer"},
         )
     if not user.is_active:
         raise HTTPException(
