@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { listLands } from "../../services/api";
+import { listLands, deleteLand } from "../../services/api";
 import "../Lands.css";
 
 export default function LandsPage() {
@@ -34,6 +34,18 @@ export default function LandsPage() {
   useEffect(() => {
     fetchLands();
   }, [fetchLands]);
+
+  const handleDeleteLand = async (e, publicId, landName) => {
+    e.stopPropagation(); // prevent navigation
+    if (window.confirm(`Are you sure you want to delete ${landName}? This cannot be undone.`)) {
+      try {
+        await deleteLand(publicId);
+        setLands((prev) => prev.filter(l => l.public_id !== publicId));
+      } catch (err) {
+        alert("Failed to delete land: " + err.message);
+      }
+    }
+  };
 
   const statusColor = (status) => {
     if (!status) return "info";
@@ -201,12 +213,35 @@ export default function LandsPage() {
               
               <div className="premium-land-card__footer">
                 <span className="date-label">Added {new Date(land.created_at).toLocaleDateString()}</span>
-                <div className="explore-btn">
-                  Explore
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                    <polyline points="12 5 19 12 12 19"></polyline>
-                  </svg>
+                <div style={{ display: "flex", gap: "var(--space-sm)", alignItems: "center" }}>
+                  <button 
+                    className="icon-btn delete-btn" 
+                    title="Delete land"
+                    onClick={(e) => handleDeleteLand(e, land.public_id, land.name)}
+                    style={{ 
+                      color: "var(--error)", 
+                      background: "rgba(239, 68, 68, 0.1)",
+                      border: "1px solid rgba(239, 68, 68, 0.2)",
+                      padding: "6px",
+                      borderRadius: "var(--radius-md)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                  <div className="explore-btn">
+                    Explore
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                  </div>
                 </div>
               </div>
             </div>
