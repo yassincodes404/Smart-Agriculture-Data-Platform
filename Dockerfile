@@ -12,6 +12,10 @@ RUN npm ci
 # Copy the rest of the frontend source
 COPY services/frontend/web/ ./
 
+# Pass Google Client ID for Vite build
+ARG VITE_GOOGLE_CLIENT_ID
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+
 # Build the Vite React app for production
 RUN npm run build
 
