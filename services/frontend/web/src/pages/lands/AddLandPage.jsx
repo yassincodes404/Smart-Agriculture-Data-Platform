@@ -355,9 +355,9 @@ export default function AddLandPage() {
                   <label className="tracking-option" key={item.key}>
                     <input
                       type="checkbox"
-                      checked={trackingVariables.includes(item.key)}
-                      onChange={() => toggleTrackingVariable(item.key)}
-                      disabled={loading}
+                      checked={item.key === "ndvi" ? true : trackingVariables.includes(item.key)}
+                      onChange={() => item.key !== "ndvi" && toggleTrackingVariable(item.key)}
+                      disabled={loading || item.key === "ndvi"}
                     />
                     <span>{item.label}</span>
                   </label>

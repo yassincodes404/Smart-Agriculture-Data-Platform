@@ -48,6 +48,8 @@ def execute(land_id: int, db: Session) -> None:
         lon = float(land.longitude)
         
         tracked_vars = land.metadata_.get("trackingVariables") if land.metadata_ else None
+        if isinstance(tracked_vars, list) and "ndvi" not in tracked_vars:
+            tracked_vars.append("ndvi")
         
         pipeline_errors = []
 
