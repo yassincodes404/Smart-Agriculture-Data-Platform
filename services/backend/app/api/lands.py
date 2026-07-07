@@ -245,6 +245,10 @@ def reanalyze_land(
             run_ai_land_analysis(land_id, local_db, user_id=uid)
             
             update_progress("active")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).exception("Background analysis failed: %s", e)
+            update_progress("failed")
         finally:
             local_db.close()
 
