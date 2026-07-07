@@ -84,6 +84,7 @@ def register_land_for_discovery(
     geometry: GeoJSONPolygon,
     description: Optional[str],
     user_id: Optional[int],
+    metadata_: Optional[dict] = None,
 ) -> int:
     """
     Validate the GeoJSON polygon, compute centroid + area, persist, and return land_id.
@@ -117,6 +118,7 @@ def register_land_for_discovery(
         user_id=user_id,
         boundary_polygon=closed_geojson,
         area_hectares=area_ha,
+        metadata_=metadata_,
     )
     db.commit()
     db.refresh(land)
@@ -138,6 +140,7 @@ def get_land_detail(db: Session, land_id: int) -> Optional[LandDetailResponse]:
         area_hectares=float(land.area_hectares) if land.area_hectares is not None else None,
         status=land.status,
         boundary_polygon=land.boundary_polygon,
+        metadata_=land.metadata_,
         created_at=land.created_at.isoformat(),
     )
 
@@ -156,6 +159,7 @@ def get_land_by_public_id(db: Session, public_id: str) -> Optional[LandDetailRes
         area_hectares=float(land.area_hectares) if land.area_hectares is not None else None,
         status=land.status,
         boundary_polygon=land.boundary_polygon,
+        metadata_=land.metadata_,
         created_at=land.created_at.isoformat(),
     )
 

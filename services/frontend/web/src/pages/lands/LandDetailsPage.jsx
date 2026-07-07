@@ -107,7 +107,11 @@ export default function LandDetailsPage() {
   const [error, setError] = useState(null);
   const [activeLayer, setActiveLayer] = useState("true_color");
   const [cropZones, setCropZones] = useState([]);
+  const [activeTab, setActiveTab] = useState("overview");
   const [reanalyzing, setReanalyzing] = useState(false);
+
+  // Read tracking variables (default to all if not set on old lands)
+  const trackedVars = land?.metadata_?.trackingVariables || ["ndvi", "climate", "soil", "water"];
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [intervalDays, setIntervalDays] = useState(16);
@@ -789,35 +793,41 @@ export default function LandDetailsPage() {
                 {latestCrop?.payload?.growth_stage?.replace("_", " ") || "—"}
               </div>
             </div>
-            <div className="metric-card">
-              <div className="metric-card__value">
-                {latestClimate ? `${latestClimate.value}°C` : "—"}
+            {trackedVars.includes("climate") && (
+              <div className="metric-card">
+                <div className="metric-card__value">
+                  {latestClimate ? `${latestClimate.value}°C` : "—"}
+                </div>
+                <div className="metric-card__label">Temperature</div>
+                <div className="metric-card__sub">
+                  Humidity: {latestClimate?.payload?.humidity_pct ? `${latestClimate.payload.humidity_pct}%` : "—"}
+                </div>
               </div>
-              <div className="metric-card__label">Temperature</div>
-              <div className="metric-card__sub">
-                Humidity: {latestClimate?.payload?.humidity_pct ? `${latestClimate.payload.humidity_pct}%` : "—"}
+            )}
+            {trackedVars.includes("soil") && (
+              <div className="metric-card">
+                <div className="metric-card__value">
+                  {latestSoil ? `${latestSoil.value}%` : "—"}
+                </div>
+                <div className="metric-card__label">Soil Moisture</div>
+                <div className="metric-card__sub">
+                  {latestSoil?.payload?.soil_type || "—"}
+                </div>
               </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-card__value">
-                {latestSoil ? `${latestSoil.value}%` : "—"}
+            )}
+            {trackedVars.includes("water") && (
+              <div className="metric-card">
+                <div className="metric-card__value">
+                  {latestWater?.payload?.crop_water_requirement_mm && land?.area_hectares 
+                    ? `${(latestWater.payload.crop_water_requirement_mm * land.area_hectares * 10).toFixed(0)}m³` 
+                    : "—"}
+                </div>
+                <div className="metric-card__label">Est. Water Needed</div>
+                <div className="metric-card__sub">
+                  Based on ET₀ {latestWater?.payload?.crop_water_requirement_mm?.toFixed(1) || 0}mm
+                </div>
               </div>
-              <div className="metric-card__label">Soil Moisture</div>
-              <div className="metric-card__sub">
-                {latestSoil?.payload?.soil_type || "—"}
-              </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-card__value">
-                {latestWater?.payload?.crop_water_requirement_mm && land?.area_hectares 
-                  ? `${(latestWater.payload.crop_water_requirement_mm * land.area_hectares * 10).toFixed(0)}m³` 
-                  : "—"}
-              </div>
-              <div className="metric-card__label">Est. Water Needed</div>
-              <div className="metric-card__sub">
-                Based on ET₀ {latestWater?.payload?.crop_water_requirement_mm?.toFixed(1) || 0}mm
-              </div>
-            </div>
+            )}
             <div className="metric-card">
               <div className="metric-card__value">
                 {primaryCropType?.split("(")[0]?.trim() || "Unknown"}
@@ -1127,7 +1137,7 @@ export default function LandDetailsPage() {
         </div>
 
         {/* --- Soil Intelligence --- */}
-        {soil.length > 0 && (
+        {trackedVars.includes("soil") && soil && soil.length > 0 && (
           <div className="anim-stagger" style={{ "--stagger-index": 4 }}>
             <div className="section-header">
               <h2 className="section-header__title">Soil Intelligence</h2>
@@ -1209,7 +1219,7 @@ export default function LandDetailsPage() {
         )}
 
         {/* --- Crop Intelligence (per-zone health + harvest) --- */}
-        {(cropHealth || harvest) && (
+        {trackedVars.includes("ndvi") && (cropHealth || harvest) && (
           <div className="anim-stagger" style={{ "--stagger-index": 5 }}>
             <div className="section-header">
               <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
@@ -1345,11 +1355,11 @@ export default function LandDetailsPage() {
                 )}
               </div>
             )}
-          </div>
+            </div>
         )}
 
         {/* --- Climate History --- */}
-        {climate.length > 0 && (
+        {trackedVars.includes("climate") && climate && climate.length > 0 && (
           <div className="anim-stagger" style={{ "--stagger-index": 6 }}>
             <div className="section-header">
               <h2 className="section-header__title">Climate History</h2>
@@ -1398,7 +1408,7 @@ export default function LandDetailsPage() {
         )}
 
         {/* --- Water Usage --- */}
-        {water.length > 0 && (
+        {trackedVars.includes("water") && water && water.length > 0 && (
           <div className="anim-stagger" style={{ "--stagger-index": 7 }}>
             <div className="section-header">
               <h2 className="section-header__title">Irrigation & Water Usage</h2>

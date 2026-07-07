@@ -75,6 +75,7 @@ def discover_land(
         geometry=body.geometry,
         description=body.description,
         user_id=user_id,
+        metadata_=body.metadata_,
     )
 
     # Real activity log (only admins can see)

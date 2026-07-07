@@ -63,6 +63,7 @@ class LandDiscoverRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     geometry: GeoJSONPolygon
+    metadata_: dict[str, Any] = Field(default_factory=dict)
 
 
 class LandDiscoverAccepted(BaseModel):
@@ -85,6 +86,7 @@ class LandDetailResponse(BaseModel):
     area_hectares: Optional[float]
     status: str
     boundary_polygon: Optional[dict[str, Any]]
+    metadata_: Optional[dict[str, Any]] = None
     created_at: str
 
 

@@ -255,10 +255,10 @@ export async function listLands() {
  * Body: { name, description, geometry: { type: "Polygon", coordinates: [...] } }
  * Response: { status: "processing", land_id }
  */
-export async function discoverLand({ name, description, geometry }) {
+export async function discoverLand({ name, description, geometry, metadata_ }) {
   return request("/lands/discover", {
     method: "POST",
-    body: JSON.stringify({ name, description, geometry }),
+    body: JSON.stringify({ name, description, geometry, metadata_ }),
   });
 }
 

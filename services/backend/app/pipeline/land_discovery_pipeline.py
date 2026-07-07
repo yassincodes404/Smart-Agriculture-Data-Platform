@@ -47,6 +47,8 @@ def execute(land_id: int, db: Session) -> None:
         lat = float(land.latitude)
         lon = float(land.longitude)
         
+        tracked_vars = land.metadata_.get("trackingVariables") if land.metadata_ else None
+        
         pipeline_errors = []
 
         # ------------------------------------------------------------------
@@ -71,7 +73,7 @@ def execute(land_id: int, db: Session) -> None:
                         continue
                     
                     # 1. land_climate
-                    if "temperature_max_c" in rec or "rainfall_mm" in rec:
+                    if (tracked_vars is None or "climate" in tracked_vars) and ("temperature_max_c" in rec or "rainfall_mm" in rec):
                         # Estimate avg temp if needed, or store max. We use temperature_celsius as max temp proxy for daily.
                         temp = rec.get("temperature_max_c")
                         rain = rec.get("rainfall_mm")
@@ -87,7 +89,7 @@ def execute(land_id: int, db: Session) -> None:
                         count_clim += 1
 
                     # 2. land_soil
-                    if "soil_moisture_pct" in rec:
+                    if (tracked_vars is None or "soil" in tracked_vars) and "soil_moisture_pct" in rec:
                         row_soil = repository.insert_land_soil_snapshot(
                             db, land_id,
                             moisture_pct=rec["soil_moisture_pct"],
@@ -97,7 +99,7 @@ def execute(land_id: int, db: Session) -> None:
                         count_soil += 1
                         
                     # 3. land_water (ET0)
-                    if "et0_mm" in rec:
+                    if (tracked_vars is None or "water" in tracked_vars) and "et0_mm" in rec:
                         row_water = repository.insert_land_water_snapshot(
                             db, land_id,
                             crop_water_requirement_mm=rec["et0_mm"],
@@ -133,9 +135,12 @@ def execute(land_id: int, db: Session) -> None:
         # Step 5: Static soil profile (ISRIC SoilGrids v2)
         # ------------------------------------------------------------------
         try:
-            update_progress("Step 4/6: Fetching soil profile from ISRIC SoilGrids...")
-            from app.tasks.soil_task import run_soil_profile_task
-            run_soil_profile_task(land_id, db)
+            if tracked_vars is None or "soil" in tracked_vars:
+                update_progress("Step 4/6: Fetching soil profile from ISRIC SoilGrids...")
+                from app.tasks.soil_task import run_soil_profile_task
+                run_soil_profile_task(land_id, db)
+            else:
+                logger.info("Skipping soil profile task (tracking disabled)")
         except Exception as e:
             pipeline_errors.append("soil_profile")
             logger.exception("soil profile task failed land_id=%s (continuing)", land_id)
@@ -144,9 +149,12 @@ def execute(land_id: int, db: Session) -> None:
         # Step 6: Crop Detection & Intelligence (AI-based)
         # ------------------------------------------------------------------
         try:
-            update_progress("Step 5/6: Running ML multi-crop detection...")
-            from app.tasks.crop_task import run_crop_detection_task
-            run_crop_detection_task(land_id, db, days=365)
+            if tracked_vars is None or "ndvi" in tracked_vars:
+                update_progress("Step 5/6: Running ML multi-crop detection...")
+                from app.tasks.crop_task import run_crop_detection_task
+                run_crop_detection_task(land_id, db, days=365)
+            else:
+                logger.info("Skipping crop detection task (tracking disabled)")
         except Exception as e:
             pipeline_errors.append("crop_detection")
             logger.exception("Crop detection task failed land_id=%s (continuing)", land_id)

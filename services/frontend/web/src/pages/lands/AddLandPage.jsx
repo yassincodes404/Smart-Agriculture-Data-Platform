@@ -149,21 +149,18 @@ export default function AddLandPage() {
     setPhase("submitting");
 
     try {
-      const selectedVariables = trackingVariables.length > 0
-        ? trackingVariables.join(", ")
-        : "standard monitoring";
-      const metadata = [
-        `Tracking frequency: ${trackingFrequency}`,
-        `Tracking variables: ${selectedVariables}`,
-      ].filter(Boolean).join("\n");
-      const fullDescription = [description.trim(), metadata].filter(Boolean).join("\n\n");
+      const metadata_ = {
+        trackingFrequency,
+        trackingVariables,
+      };
 
       // Phase 1: Submit to backend
       setPhase("analyzing");
       const result = await discoverLand({
         name: name.trim(),
-        description: fullDescription || null,
+        description: description.trim() || null,
         geometry,
+        metadata_,
       });
 
       // Phase 2: Success

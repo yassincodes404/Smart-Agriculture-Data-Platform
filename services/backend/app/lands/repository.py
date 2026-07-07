@@ -31,6 +31,7 @@ def create_land(
     user_id: Optional[int],
     boundary_polygon: Optional[dict] = None,
     area_hectares: Optional[float] = None,
+    metadata_: Optional[dict] = None,
 ) -> Land:
     row = Land(
         name=name,
@@ -41,6 +42,7 @@ def create_land(
         boundary_polygon=boundary_polygon,
         area_hectares=Decimal(str(area_hectares)) if area_hectares is not None else None,
         status="processing",
+        metadata_=metadata_ or {},
     )
     db.add(row)
     db.flush()
@@ -57,7 +59,7 @@ def get_land_by_public_id(db: Session, public_id: str) -> Optional[Land]:
         uuid_val = UUID(public_id)
     except ValueError:
         return None
-    return db.query(Land).filter(Land.public_id == uuid_val).first()
+    return db.query(Land).filter(Land.public_id == uuid_val, Land.is_deleted == False).first()  # noqa: E712
 
 
 def list_all_lands(
@@ -65,8 +67,8 @@ def list_all_lands(
     *,
     user_id: Optional[int] = None,
 ) -> Sequence[Land]:
-    """Return all lands, optionally filtered by owner."""
-    stmt = select(Land).order_by(Land.created_at.desc())
+    """Return all non-deleted lands, optionally filtered by owner."""
+    stmt = select(Land).where(Land.is_deleted == False).order_by(Land.created_at.desc())  # noqa: E712
     if user_id is not None:
         stmt = stmt.where(Land.user_id == user_id)
     return db.execute(stmt).scalars().all()
