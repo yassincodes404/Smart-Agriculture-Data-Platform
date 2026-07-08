@@ -51,6 +51,13 @@
   overflow-x: hidden;
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   transition: width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  padding-top: env(safe-area-inset-top, 0px);
+  /* Hide scrollbar across all browsers */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.sidebar::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .app-shell--collapsed .sidebar {
@@ -690,7 +697,8 @@
   .topbar {
     padding-left: var(--space-md);
     padding-right: var(--space-md);
-    height: 56px;
+    padding-top: env(safe-area-inset-top, 0px);
+    height: calc(56px + env(safe-area-inset-top, 0px));
   }
 
   .topbar__left {
