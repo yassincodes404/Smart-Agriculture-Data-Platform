@@ -16,7 +16,7 @@
 
 // For web (behind nginx or Vite proxy): "/api/v1"
 // For mobile / direct: use full URL e.g. "http://10.0.2.2:8000/api/v1" (Android emulator) or your LAN IP
-const API_BASE = "/api/v1";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
 // Token storage - can be overridden for React Native (AsyncStorage / SecureStore)
 let _getToken = () => localStorage.getItem("agri_token");
