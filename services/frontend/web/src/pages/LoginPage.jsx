@@ -11,12 +11,10 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import "./AuthPages.css";
 
-/* Detect Capacitor native environment */
-const isNative =
-  typeof window !== "undefined" &&
-  window.Capacitor &&
-  window.Capacitor.isNativePlatform &&
-  window.Capacitor.isNativePlatform();
+import { Capacitor } from "@capacitor/core";
+
+/* Detect Capacitor native environment properly */
+const isNative = Capacitor.isNativePlatform();
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
