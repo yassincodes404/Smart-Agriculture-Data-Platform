@@ -9,6 +9,13 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import "./AuthPages.css";
 
+/* Detect Capacitor native environment */
+const isNative =
+  typeof window !== "undefined" &&
+  window.Capacitor &&
+  window.Capacitor.isNativePlatform &&
+  window.Capacitor.isNativePlatform();
+
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -58,8 +65,9 @@ export default function RegisterPage() {
     }
   };
 
-  // Initialize Google Sign In
+  // Initialize Google Sign In — only for web
   useEffect(() => {
+    if (isNative) return;
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
     if (window.google && clientId) {
@@ -91,14 +99,8 @@ export default function RegisterPage() {
         <div className="auth-hero__overlay" />
         <div className="auth-hero__content">
           <div className="auth-hero__logo">
-            <div className="auth-hero__logo-icon">
-              <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 2C16 2 6 10 6 18C6 23.5 10.5 28 16 28C21.5 28 26 23.5 26 18C26 10 16 2 16 2Z" fill="rgba(255,255,255,0.9)"/>
-                <path d="M16 8C16 8 10 14 10 19C10 22.3 12.7 25 16 25C19.3 25 22 22.3 22 19C22 14 16 8 16 8Z" fill="rgba(34,197,94,0.8)"/>
-                <path d="M16 14V25" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
-                <path d="M16 18L19 15" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" strokeLinecap="round"/>
-                <path d="M16 21L13 18" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" strokeLinecap="round"/>
-              </svg>
+            <div className="auth-hero__logo-icon" style={{ background: "transparent", padding: 0 }}>
+              <img src="/logo.png" alt="AgriData Egypt Logo" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "12px" }} />
             </div>
             <span className="auth-hero__logo-text">AgriData Egypt</span>
           </div>
@@ -147,6 +149,12 @@ export default function RegisterPage() {
       {/* ---------- Right Form Panel ---------- */}
       <div className="auth-form-panel">
         <div className="auth-form-container">
+          {/* Mobile-only logo above form */}
+          <div className="auth-mobile-logo">
+            <img src="/logo.png" alt="AgriData Egypt" className="auth-mobile-logo__img" />
+            <span className="auth-mobile-logo__text">AgriData Egypt</span>
+          </div>
+
           <div className="auth-form-header">
             <h2 className="auth-form-title">Create your account</h2>
             <p className="auth-form-subtitle">Fill in your details to get started</p>
@@ -270,20 +278,22 @@ export default function RegisterPage() {
               )}
             </button>
 
-            {/* Google Sign Up */}
-            <div style={{ marginTop: "1rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
-                <span style={{ fontSize: "12px", color: "var(--gray-500)" }}>or</span>
-                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+            {/* Google Sign Up — hidden on native Capacitor apps */}
+            {!isNative && (
+              <div style={{ marginTop: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+                  <span style={{ fontSize: "12px", color: "var(--gray-500)" }}>or</span>
+                  <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+                </div>
+                <div id="google-signup-button" style={{ display: "flex", justifyContent: "center" }}></div>
+                {!import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                  <p style={{ fontSize: "11px", color: "#f59e0b", textAlign: "center", marginTop: "4px" }}>
+                    Set VITE_GOOGLE_CLIENT_ID in .env to enable Google Sign-In
+                  </p>
+                )}
               </div>
-              <div id="google-signup-button" style={{ display: "flex", justifyContent: "center" }}></div>
-              {!import.meta.env.VITE_GOOGLE_CLIENT_ID && (
-                <p style={{ fontSize: "11px", color: "#f59e0b", textAlign: "center", marginTop: "4px" }}>
-                  Set VITE_GOOGLE_CLIENT_ID in .env to enable Google Sign-In
-                </p>
-              )}
-            </div>
+            )}
           </form>
 
           <div className="auth-form-footer">

@@ -3,7 +3,7 @@ pid: 20640
 cwd: "D:\Projects\Smart-Agriculture-Data-Platform"
 command: "Set-Location D:\\Projects\\Smart-Agriculture-Data-Platform\\services\\backend; python -m pytest app/tests/connectors/test_open_meteo_polygon.py app/tests/soil/test_soil_retry.py app/tests/trust/ app/tests/api/test_soil_endpoints.py app/tests/api/test_lands.py -q --tb=short 2>&1"
 started_at: 2026-07-08T12:30:18.995Z
-running_for_ms: 3145002  
+running_for_ms: 6615005  
 ---
 .................EEEEFEEEEEFEEEFEEFFFF                                   [100%]
 =================================== ERRORS ====================================

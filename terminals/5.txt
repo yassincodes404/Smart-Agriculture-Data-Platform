@@ -3,7 +3,7 @@ pid: 15972
 cwd: "D:\Projects\Smart-Agriculture-Data-Platform"
 command: "Set-Location D:\\Projects\\Smart-Agriculture-Data-Platform\\services\\backend; python -m pytest app/tests/api/test_soil_endpoints.py app/tests/api/test_lands.py -q --tb=line 2>&1 | Select-Object -Last 40"
 started_at: 2026-07-08T12:34:29.669Z
-running_for_ms: 2895006  
+running_for_ms: 6365007  
 ---
           on_event is deprecated, use lifespan event handlers instead.
   

@@ -3,7 +3,7 @@ pid: 16500
 cwd: "D:\Projects\Smart-Agriculture-Data-Platform"
 command: "Set-Location D:\\Projects\\Smart-Agriculture-Data-Platform\\services\\backend; python -m pytest app/tests/api/test_soil_endpoints.py -q --tb=line 2>&1"
 started_at: 2026-07-08T12:31:55.407Z
-running_for_ms: 3050012  
+running_for_ms: 6520002  
 ---
 EEEEFEEEEEFEEEFEE                                                        [100%]
 =================================== ERRORS ====================================

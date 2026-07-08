@@ -1,15 +1,22 @@
 /**
  * pages/LoginPage.jsx
  * -------------------
- * Premium login page with split-screen layout.
- * Left: hero visual with branding
- * Right: login form
+ * Premium mobile-first login page.
+ * On desktop: split-screen with hero left, form right.
+ * On mobile (Capacitor): full-screen gradient with glassmorphic form card.
  */
 
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import "./AuthPages.css";
+
+/* Detect Capacitor native environment */
+const isNative =
+  typeof window !== "undefined" &&
+  window.Capacitor &&
+  window.Capacitor.isNativePlatform &&
+  window.Capacitor.isNativePlatform();
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -21,8 +28,10 @@ export default function LoginPage() {
   const { login, googleSignIn } = useAuth();
   const navigate = useNavigate();
 
-  // Initialize Google Sign In button
+  // Initialize Google Sign In button — only for web (not Capacitor)
   useEffect(() => {
+    if (isNative) return; // Skip Google GSI in native apps
+
     const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
     if (window.google && clientId) {
@@ -57,7 +66,13 @@ export default function LoginPage() {
       await login(email, password);
       navigate("/dashboard");
     } catch (err) {
-      setError(err.message || "Invalid email or password.");
+      // Provide clearer error messages for mobile users
+      const msg = err.message || "";
+      if (msg.includes("fetch") || msg.includes("network") || msg.includes("Failed")) {
+        setError("Cannot connect to server. Please check your internet connection.");
+      } else {
+        setError(msg || "Invalid email or password.");
+      }
     } finally {
       setLoading(false);
     }
@@ -122,6 +137,12 @@ export default function LoginPage() {
       {/* ---------- Right Form Panel ---------- */}
       <div className="auth-form-panel">
         <div className="auth-form-container">
+          {/* Mobile-only logo above form */}
+          <div className="auth-mobile-logo">
+            <img src="/logo.png" alt="AgriData Egypt" className="auth-mobile-logo__img" />
+            <span className="auth-mobile-logo__text">AgriData Egypt</span>
+          </div>
+
           <div className="auth-form-header">
             <h2 className="auth-form-title">Welcome back</h2>
             <p className="auth-form-subtitle">Sign in to access your dashboard</p>
@@ -153,7 +174,6 @@ export default function LoginPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   autoComplete="email"
-                  autoFocus
                 />
               </div>
             </div>
@@ -207,20 +227,22 @@ export default function LoginPage() {
               )}
             </button>
 
-            {/* Google Sign In */}
-            <div style={{ marginTop: "1rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
-                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
-                <span style={{ fontSize: "12px", color: "var(--gray-500)" }}>or</span>
-                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+            {/* Google Sign In — hidden on native Capacitor apps */}
+            {!isNative && (
+              <div style={{ marginTop: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+                  <span style={{ fontSize: "12px", color: "var(--gray-500)" }}>or</span>
+                  <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+                </div>
+                <div id="google-signin-button" style={{ display: "flex", justifyContent: "center" }}></div>
+                {!import.meta.env.VITE_GOOGLE_CLIENT_ID && (
+                  <p style={{ fontSize: "11px", color: "#f59e0b", textAlign: "center", marginTop: "4px" }}>
+                    Set VITE_GOOGLE_CLIENT_ID in .env to enable Google Sign-In
+                  </p>
+                )}
               </div>
-              <div id="google-signin-button" style={{ display: "flex", justifyContent: "center" }}></div>
-              {!import.meta.env.VITE_GOOGLE_CLIENT_ID && (
-                <p style={{ fontSize: "11px", color: "#f59e0b", textAlign: "center", marginTop: "4px" }}>
-                  Set VITE_GOOGLE_CLIENT_ID in .env to enable Google Sign-In
-                </p>
-              )}
-            </div>
+            )}
           </form>
 
           <div className="auth-form-footer">
