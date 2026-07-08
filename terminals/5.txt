@@ -1,0 +1,47 @@
+---
+pid: 15972
+cwd: "D:\Projects\Smart-Agriculture-Data-Platform"
+command: "Set-Location D:\\Projects\\Smart-Agriculture-Data-Platform\\services\\backend; python -m pytest app/tests/api/test_soil_endpoints.py app/tests/api/test_lands.py -q --tb=line 2>&1 | Select-Object -Last 40"
+started_at: 2026-07-08T12:34:29.669Z
+running_for_ms: 2895006  
+---
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastapi\applications.py:4656
+  C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastapi\applications.py:4656: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_404_for_unknown_land
+FAILED app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_404_for_unknown_land
+FAILED app/tests/api/test_soil_endpoints.py::TestSoilStatus::test_404_for_unknown_land
+FAILED app/tests/api/test_lands.py::test_discover_land_returns_202 - assert 4...
+FAILED app/tests/api/test_lands.py::test_timeseries_unknown_land - assert 401...
+FAILED app/tests/api/test_lands.py::test_timeseries_climate_returns_points_after_discovery
+FAILED app/tests/api/test_lands.py::test_timeseries_climate_empty_when_connector_returns_none
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_returns_200_with_profile
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_all_depth_layers_present
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_ph_classification_in_response
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_returns_unavailable_when_no_profile
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_returns_top_crops
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_suitability_labels_valid
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_advice_list_not_empty
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_overall_best_score_present
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_returns_unavailable_when_no_profile
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilStatus::test_returns_combined_data
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilStatus::test_moisture_populated_from_soil_snapshot
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilStatus::test_advice_always_present
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfileTask::test_task_inserts_profile_row
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfileTask::test_task_returns_false_when_api_fails
+7 failed, 2 warnings, 14 errors in 147.65s (0:02:27)

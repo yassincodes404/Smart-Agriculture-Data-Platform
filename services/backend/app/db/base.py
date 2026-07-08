@@ -29,3 +29,5 @@ from app.models.ai_settings import AiApiKey  # noqa: F401
 from app.models.ai_chat import AiChatSession, AiChatMessage  # noqa: F401
 from app.models.land_ai_insight import LandAiInsight  # noqa: F401
 from app.models.activity_log import UserActivityLog  # noqa: F401
+from app.models.observation_provenance import ObservationProvenance  # noqa: F401
+from app.models.user_declared_crop import UserDeclaredCrop  # noqa: F401

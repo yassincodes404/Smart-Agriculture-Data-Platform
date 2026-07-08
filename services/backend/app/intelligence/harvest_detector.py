@@ -140,10 +140,10 @@ class HarvestDetector:
             
             est_date = last_harvest.date + timedelta(days=total_cycle)
             days_remaining = (est_date - today).days
-            
+
             return HarvestPrediction(
                 estimated_date=est_date,
-                days_remaining=max(0, days_remaining),
+                days_remaining=days_remaining,
                 confidence=0.70 if days_remaining > 0 else 0.85,
                 based_on="crop_profile",
             )

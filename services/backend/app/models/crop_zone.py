@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.user import Base
@@ -26,5 +26,11 @@ class CropZone(Base):
     latest_ndvi = Column(Numeric(6, 4), nullable=True)
     latest_growth_stage = Column(String(50), nullable=True)
     estimated_yield_tons = Column(Numeric(14, 4), nullable=True)
+    detection_method = Column(String(64), nullable=True)
+    trust_tier = Column(String(16), nullable=True)
+    separation_score = Column(Numeric(6, 4), nullable=True)
+    ambiguous = Column(Boolean, nullable=True, default=False)
+    suppressed = Column(Boolean, nullable=True, default=False)
+    zone_metadata = Column(JSONB, nullable=True)
     first_detected = Column(DateTime, default=_utcnow, nullable=False)
     last_updated = Column(DateTime, default=_utcnow, onupdate=_utcnow, nullable=False)

@@ -1,0 +1,391 @@
+/* ================================================================
+   mobile.css — Touch-first interactions & mobile UX patterns
+   Complements layout.css; shared patterns for RN migration prep.
+   ================================================================ */
+
+/* Safe-area support for notched phones */
+.app-shell {
+  height: 100dvh;
+  padding-top: env(safe-area-inset-top, 0);
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+.app-shell__content {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* Touch-friendly press states (visible without hover) */
+@media (hover: none), (pointer: coarse) {
+  .card:not(.card--no-hover):active,
+  .premium-land-card:active,
+  .land-card:active,
+  .intel-item:active,
+  .ai-insight-card:active,
+  .premium-stat-card:active,
+  .metric-card:active,
+  .content-card:active,
+  .team-card:active {
+    transform: scale(0.98);
+    box-shadow: var(--shadow-md);
+  }
+
+  .premium-land-card:active .explore-btn svg {
+    transform: translateX(4px);
+  }
+
+  .premium-land-card:hover {
+    transform: none;
+    box-shadow: var(--shadow-md);
+  }
+
+  .card:not(.card--no-hover):hover,
+  .intel-item:hover,
+  .ai-insight-card:hover,
+  .premium-stat-card:hover {
+    transform: none;
+  }
+
+  .logs-table tbody tr:hover {
+    transform: none;
+  }
+
+  .filter-pill:active,
+  .glass-filter-btn:active,
+  .btn:active {
+    transform: scale(0.97);
+  }
+}
+
+/* Minimum touch targets */
+.touch-target {
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-btn {
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast), transform var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.icon-btn:active {
+  transform: scale(0.92);
+}
+
+.delete-btn {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.delete-btn:active {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+/* Mobile data cards (table alternative) */
+.data-card-list {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+}
+
+.data-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.data-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-md);
+  font-size: 14px;
+}
+
+.data-card__label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.data-card__value {
+  color: var(--text-primary);
+  text-align: right;
+  word-break: break-word;
+}
+
+.data-card__value--mono {
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+}
+
+.data-card__value--bold {
+  font-weight: 600;
+}
+
+/* Confirm dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--space-md);
+  padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom, 0));
+  animation: fadeIn 150ms ease both;
+}
+
+.confirm-dialog {
+  background: #fff;
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  width: 100%;
+  max-width: 400px;
+  box-shadow: var(--shadow-xl);
+  animation: slideUp 250ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+.confirm-dialog__title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: var(--space-sm);
+}
+
+.confirm-dialog__message {
+  font-size: 15px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-xl);
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-sm);
+}
+
+.confirm-dialog__actions .btn {
+  min-height: var(--touch-target);
+  width: 100%;
+  justify-content: center;
+}
+
+@media (min-width: 480px) {
+  .confirm-overlay {
+    align-items: center;
+  }
+
+  .confirm-dialog__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .confirm-dialog__actions .btn {
+    width: auto;
+    min-width: 100px;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Show card list, hide table on mobile */
+@media (max-width: 640px) {
+  .responsive-table-container .logs-table,
+  .responsive-table-container .premium-compare-table {
+    display: none;
+  }
+
+  .responsive-table-container .data-card-list {
+    display: flex;
+  }
+}
+
+/* Land detail water table — cards on tablet/mobile */
+@media (max-width: 1024px) {
+  .responsive-table-container .land-detail-water-table {
+    display: none;
+  }
+
+  .responsive-table-container .data-card-list {
+    display: flex;
+  }
+}
+
+/* Bottom tab navigation (mobile web → RN tab bar preview) */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: calc(60px + env(safe-area-inset-bottom, 0));
+    padding-bottom: env(safe-area-inset-bottom, 0);
+    background: #fff;
+    border-top: 1px solid var(--border-color);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+    z-index: 200;
+    align-items: stretch;
+    justify-content: space-around;
+  }
+
+  .app-shell__main {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0));
+  }
+
+  /* Land detail — extra scroll room for AgriMind launcher pill above bottom nav */
+  .app-shell--land-detail .app-shell__content {
+    padding-bottom: calc(72px + var(--space-sm));
+  }
+
+  .mobile-bottom-nav__item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 10px;
+    font-weight: 600;
+    min-height: var(--touch-target);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-bottom-nav__item--active {
+    color: var(--green-600);
+  }
+
+  .mobile-bottom-nav__icon svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .mobile-bottom-nav__fab {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--green-500), var(--green-700));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: -18px;
+    box-shadow: 0 4px 14px rgba(34, 197, 94, 0.4);
+    text-decoration: none;
+    flex-shrink: 0;
+  }
+
+  .mobile-bottom-nav__fab svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .mobile-bottom-nav__fab:active {
+    transform: scale(0.94);
+  }
+
+  .land-section-header--mobile {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: var(--space-md);
+  }
+
+  .ai-badge-inline {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+  }
+
+  .satellite-image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: var(--space-md);
+  }
+
+  .satellite-image-card__thumb {
+    height: 140px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: var(--space-sm);
+    background: var(--gray-100);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .satellite-image-card__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .modal-sheet {
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+}
+
+@media (min-width: 641px) {
+  .satellite-image-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-md);
+  }
+
+  .satellite-image-card__thumb {
+    height: 180px;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-bottom: var(--space-sm);
+    background: var(--gray-100);
+  }
+
+  .satellite-image-card__thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}

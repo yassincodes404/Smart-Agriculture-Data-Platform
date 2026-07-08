@@ -22,8 +22,18 @@ from app.lands import repository
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_crop_rows(db: Session, land_id: int):
-    """Return all crop rows for a land, ascending by timestamp."""
+def _resolve_zone_id(db: Session, land_id: int, zone_id: Optional[int] = None) -> Optional[int]:
+    if zone_id is not None:
+        return zone_id
+    primary = repository.get_primary_crop_zone(db, land_id)
+    return int(primary.zone_id) if primary is not None else None
+
+
+def _get_crop_rows(db: Session, land_id: int, zone_id: Optional[int] = None):
+    """Return crop rows for a land (primary zone by default), ascending by timestamp."""
+    effective_zone = _resolve_zone_id(db, land_id, zone_id)
+    if effective_zone is not None:
+        return list(repository.list_land_crop_rows(db, land_id, zone_id=effective_zone))
     return list(repository.list_land_crop_rows(db, land_id))
 
 
@@ -35,71 +45,155 @@ def _latest_crop(db: Session, land_id: int):
 # 1. Crop Detection
 # ---------------------------------------------------------------------------
 
+def _crop_rows_use_synthetic(db: Session, land_id: int) -> bool:
+    from app.models.data_source import DataSource
+    from app.models.land_crop import LandCrop
+
+    row = (
+        db.query(LandCrop, DataSource)
+        .outerjoin(DataSource, LandCrop.source_id == DataSource.source_id)
+        .filter(LandCrop.land_id == land_id)
+        .order_by(LandCrop.timestamp.desc())
+        .first()
+    )
+    if not row:
+        return False
+    _, source = row
+    return bool(source and "synthetic" in (source.name or "").lower())
+
+
+def _spectral_signals_from_zone(zone) -> "SpectralSignals":
+    from app.crops.schemas import SpectralSignals
+
+    meta = zone.zone_metadata or {}
+    return SpectralSignals(
+        profile_fit=float(meta.get("profile_fit", 0.0)),
+        season_match=float(meta.get("season_match", 0.0)),
+        spatial_coherence=float(meta.get("spatial_coherence", 0.0)),
+        field_agreement=float(meta.get("field_agreement", 0.0)),
+        separation=float(zone.separation_score) if zone.separation_score is not None else None,
+        profile_margin=float(meta["profile_margin"]) if meta.get("profile_margin") is not None else None,
+    )
+
+
 def get_crop_detection(db: Session, land_id: int) -> Optional[CropDetectionResponse]:
-    from app.crops.schemas import DetectedCropItem
+    from app.crops import user_crops as user_crop_service
+    from app.crops.schemas import DetectedCropItem, SpectralSignals
+    from app.crops.suggestion import CropConfidenceBand, SpectralSignals as SignalsDataclass, evaluate_crop_suggestion
+    from app.trust.confidence_scorer import ConfidenceScorer
+    from app.trust.types import DetectionMethod, TrustTier
 
     land = repository.get_land(db, land_id)
     if land is None:
         return None
 
-    rows = _get_crop_rows(db, land_id)
-    if not rows:
+    declared = user_crop_service.get_primary_declaration(db, land_id)
+    zones = [z for z in repository.list_crop_zones(db, land_id) if not z.suppressed]
+    latest = repository.get_latest_crop_record(db, land_id)
+    ndvi_val = float(latest.ndvi_value) if latest and latest.ndvi_value is not None else 0.0
+    is_synthetic = _crop_rows_use_synthetic(db, land_id)
+
+    if not zones and not latest:
         return CropDetectionResponse(
             land_id=land_id,
             detected_crop_type=None,
             detected_crops=[],
-            detection_method="unknown",
+            detection_method=DetectionMethod.UNKNOWN.value,
+            trust_tier=TrustTier.UNAVAILABLE.value,
             confidence=0.0,
+            confidence_band=CropConfidenceBand.LOW.value,
+            requires_confirmation=True,
+            display_label="Uncertain",
+            is_synthetic_data=is_synthetic,
             ndvi_current=0.0,
             health="no_data",
             note="No NDVI data available yet. Run satellite task to populate.",
         )
 
-    # Group by crop_type
-    crop_groups: dict[str, list] = {}
-    for r in rows:
-        key = r.crop_type or "Unknown"
-        if key not in crop_groups:
-            crop_groups[key] = []
-        crop_groups[key].append(r)
+    detected_crops: list[DetectedCropItem] = []
+    for i, z in enumerate(zones):
+        conf = float(z.avg_confidence) if z.avg_confidence is not None else 0.0
+        sep = float(z.separation_score) if z.separation_score is not None else None
+        rows = repository.list_land_crop_rows(db, land_id, zone_id=int(z.zone_id))
+        ndvis = [float(r.ndvi_value) for r in rows if r.ndvi_value is not None]
+        detected_crops.append(
+            DetectedCropItem(
+                crop_type=z.crop_type,
+                confidence=round(conf, 4),
+                ndvi_mean=round(sum(ndvis) / len(ndvis), 4) if ndvis else float(z.latest_ndvi or 0),
+                growth_stage=z.latest_growth_stage,
+                is_primary=(i == 0),
+                trust_tier=z.trust_tier or TrustTier.ESTIMATED.value,
+                detection_method=z.detection_method or DetectionMethod.NDVI_PROFILE_MATCH.value,
+                ambiguous=bool(z.ambiguous),
+                show_confidence_bar=ConfidenceScorer.should_show_confidence_bar(conf, sep),
+            )
+        )
 
-    # Build detected_crops list
-    detected_crops = []
-    for crop_type, group_rows in crop_groups.items():
-        confs = [float(r.confidence) for r in group_rows if r.confidence is not None]
-        ndvis = [float(r.ndvi_value) for r in group_rows if r.ndvi_value is not None]
-        latest_row = group_rows[-1]
-        detected_crops.append(DetectedCropItem(
-            crop_type=crop_type,
-            confidence=round(sum(confs) / len(confs), 4) if confs else 0.5,
-            ndvi_mean=round(sum(ndvis) / len(ndvis), 4) if ndvis else 0.0,
-            growth_stage=latest_row.growth_stage,
-            is_primary=False,
-        ))
+    confidence_band = CropConfidenceBand.LOW.value
+    requires_confirmation = True
+    display_label = "Suggested"
+    spectral_signals: Optional[SpectralSignals] = None
 
-    # Sort by confidence desc — highest is primary
-    detected_crops.sort(key=lambda c: c.confidence, reverse=True)
-    if detected_crops:
-        detected_crops[0].is_primary = True
+    if declared:
+        primary_crop = declared.crop_type
+        method = DetectionMethod.USER_CONFIRMED.value
+        tier = TrustTier.VERIFIED.value
+        primary_conf = 1.0
+        note = f"User-confirmed crop: {primary_crop}."
+        spectral = zones[0].crop_type if zones else None
+        if spectral and spectral.lower() != primary_crop.lower():
+            note += f" Spectral estimate suggests '{spectral}' (estimated, not confirmed)."
+        requires_confirmation = False
+        display_label = "Confirmed"
+        confidence_band = CropConfidenceBand.HIGH.value
+    else:
+        primary_zone = zones[0] if zones else None
+        primary = detected_crops[0] if detected_crops else None
+        primary_crop = primary.crop_type if primary else None
+        method = DetectionMethod.NDVI_PROFILE_MATCH.value
+        tier = TrustTier.ESTIMATED.value
+        primary_conf = primary.confidence if primary else 0.0
+        spectral = primary_crop
 
-    primary = detected_crops[0] if detected_crops else None
-    latest = rows[-1]
-    ndvi_val = float(latest.ndvi_value) if latest.ndvi_value is not None else 0.0
+        signals_dc: Optional[SignalsDataclass] = None
+        if primary_zone:
+            signals_dc = SignalsDataclass(**_spectral_signals_from_zone(primary_zone).model_dump())
+            spectral_signals = SpectralSignals(**signals_dc.to_dict())
 
-    multi_note = ""
-    if len(detected_crops) > 1:
-        names = ", ".join(c.crop_type.split("(")[0].strip() for c in detected_crops)
-        multi_note = f" Multiple crops detected: {names}."
+        secondary_crop = detected_crops[1].crop_type if len(detected_crops) > 1 else None
+        evaluation = evaluate_crop_suggestion(
+            crop_type=primary_crop,
+            confidence=primary_conf,
+            area_pct=float(primary_zone.area_pct) if primary_zone and primary_zone.area_pct else 0.0,
+            ambiguous=bool(primary.ambiguous) if primary else False,
+            separation=float(primary_zone.separation_score) if primary_zone and primary_zone.separation_score is not None else None,
+            is_synthetic=is_synthetic,
+            spectral_signals=signals_dc,
+            secondary_crop=secondary_crop,
+        )
+        note = evaluation.note
+        confidence_band = evaluation.confidence_band.value
+        requires_confirmation = evaluation.requires_confirmation
+        display_label = evaluation.display_label
 
     return CropDetectionResponse(
         land_id=land_id,
-        detected_crop_type=primary.crop_type if primary else None,
+        detected_crop_type=primary_crop,
         detected_crops=detected_crops,
-        detection_method="spectral_signature",
-        confidence=primary.confidence if primary else 0.0,
+        detection_method=method,
+        trust_tier=tier,
+        declared_crop=declared.crop_type if declared else None,
+        spectral_estimate=spectral if declared else None,
+        confidence=primary_conf,
+        confidence_band=confidence_band,
+        requires_confirmation=requires_confirmation,
+        display_label=display_label,
+        spectral_signals=spectral_signals,
+        is_synthetic_data=is_synthetic,
         ndvi_current=round(ndvi_val, 4),
         health=ndvi_engine.classify_health(ndvi_val),
-        note=f"Detection based on {len(rows)} observations.{multi_note}",
+        note=note,
     )
 
 
@@ -116,7 +210,7 @@ def get_crop_health(db: Session, land_id: int) -> Optional[CropHealthResponse]:
         return None
 
     # --- Build per-zone health items ---
-    zones = repository.list_crop_zones(db, land_id)
+    zones = [z for z in repository.list_crop_zones(db, land_id) if not z.suppressed]
     zone_items = []
     total_score = 0
     total_weight = 0
@@ -214,16 +308,34 @@ def get_crop_health(db: Session, land_id: int) -> Optional[CropHealthResponse]:
     )
 
 
-# ---------------------------------------------------------------------------
-# 3. Crop Status (growth stage + trend)
-# ---------------------------------------------------------------------------
-
-def get_crop_status(db: Session, land_id: int) -> Optional[CropStatusResponse]:
+def refresh_crop_health(db: Session, land_id: int) -> Optional[CropHealthResponse]:
+    """
+    Recompute crop-zone intelligence and persist updates to crop_zones.
+    Use this for explicit refresh; GET /crop-health remains read-only.
+    """
     land = repository.get_land(db, land_id)
     if land is None:
         return None
 
-    latest = _latest_crop(db, land_id)
+    from app.intelligence.engine import CropIntelligenceEngine
+
+    engine = CropIntelligenceEngine()
+    engine.analyze_land(land_id, db, run_pipeline=False, persist=True)
+    db.commit()
+    return get_crop_health(db, land_id)
+
+
+# ---------------------------------------------------------------------------
+# 3. Crop Status (growth stage + trend)
+# ---------------------------------------------------------------------------
+
+def get_crop_status(db: Session, land_id: int, zone_id: Optional[int] = None) -> Optional[CropStatusResponse]:
+    land = repository.get_land(db, land_id)
+    if land is None:
+        return None
+
+    effective_zone = _resolve_zone_id(db, land_id, zone_id)
+    latest = repository.get_latest_crop_record(db, land_id, zone_id=effective_zone)
     if latest is None:
         return CropStatusResponse(
             land_id=land_id,
@@ -235,7 +347,7 @@ def get_crop_status(db: Session, land_id: int) -> Optional[CropStatusResponse]:
             monitoring_interval_days=int(land.monitoring_interval_days),
         )
 
-    rows = _get_crop_rows(db, land_id)
+    rows = _get_crop_rows(db, land_id, zone_id=effective_zone)
     ndvi_series = [float(r.ndvi_value) for r in rows if r.ndvi_value is not None]
 
     ndvi_val = float(latest.ndvi_value) if latest.ndvi_value is not None else 0.0
@@ -261,12 +373,14 @@ def get_crop_trend(
     db: Session,
     land_id: int,
     days: int = 90,
+    zone_id: Optional[int] = None,
 ) -> Optional[CropTrendResponse]:
     land = repository.get_land(db, land_id)
     if land is None:
         return None
 
-    rows = _get_crop_rows(db, land_id)
+    effective_zone = _resolve_zone_id(db, land_id, zone_id)
+    rows = _get_crop_rows(db, land_id, zone_id=effective_zone)
 
     # Filter to last `days` worth of data
     from datetime import datetime, timezone, timedelta
@@ -324,14 +438,16 @@ def get_crop_trend(
 # ---------------------------------------------------------------------------
 
 def get_harvest_prediction(db: Session, land_id: int) -> Optional[HarvestPredictionResponse]:
+    from app.crops.harvest_predictor import finalize_prediction, predict_zone_harvest
     from app.crops.schemas import ZoneHarvestItem
+    from app.cv.ndvi import _CROP_PROFILES
 
     land = repository.get_land(db, land_id)
     if land is None:
         return None
 
-    zones = repository.list_crop_zones(db, land_id)
-    rows = _get_crop_rows(db, land_id)
+    zones = [z for z in repository.list_crop_zones(db, land_id) if not z.suppressed]
+    rows = list(repository.list_land_crop_rows(db, land_id))
 
     zone_items: list[ZoneHarvestItem] = []
 
@@ -351,7 +467,10 @@ def get_harvest_prediction(db: Session, land_id: int) -> Optional[HarvestPredict
 
         ndvi_values = [float(r.ndvi_value) for r in z_rows if r.ndvi_value is not None]
         dates = [r.timestamp.strftime("%Y-%m-%d") for r in z_rows if r.ndvi_value is not None]
-        prediction = ndvi_engine.predict_harvest_window(ndvi_values, dates, z.crop_type)
+        latest_stage = z_rows[-1].growth_stage if z_rows else z.latest_growth_stage
+        prediction = predict_zone_harvest(
+            ndvi_values, dates, z.crop_type, latest_stage, _CROP_PROFILES
+        )
 
         if prediction is None:
             zone_items.append(ZoneHarvestItem(
@@ -363,6 +482,11 @@ def get_harvest_prediction(db: Session, land_id: int) -> Optional[HarvestPredict
             ))
             continue
 
+        prediction = finalize_prediction(prediction)
+        note = f"Based on {len(ndvi_values)} NDVI observations for {z.crop_type}."
+        if prediction.get("note_suffix"):
+            note = f"{note} {prediction['note_suffix']}"
+
         zone_items.append(ZoneHarvestItem(
             zone_id=int(z.zone_id),
             crop_type=z.crop_type,
@@ -373,7 +497,7 @@ def get_harvest_prediction(db: Session, land_id: int) -> Optional[HarvestPredict
             estimated_harvest_end=prediction["estimated_harvest_end"],
             days_to_harvest=prediction["days_to_harvest"],
             confidence_level=prediction["confidence"],
-            note=f"Based on {len(ndvi_values)} observations for {z.crop_type}.",
+            note=note,
         ))
 
     # --- Fallback: legacy single-crop prediction if no zones ---
@@ -388,8 +512,15 @@ def get_harvest_prediction(db: Session, land_id: int) -> Optional[HarvestPredict
         ndvi_values = [float(r.ndvi_value) for r in rows if r.ndvi_value is not None]
         dates = [r.timestamp.strftime("%Y-%m-%d") for r in rows if r.ndvi_value is not None]
         crop_type = rows[-1].crop_type if rows else None
-        prediction = ndvi_engine.predict_harvest_window(ndvi_values, dates, crop_type)
+        latest_stage = rows[-1].growth_stage if rows else None
+        prediction = predict_zone_harvest(
+            ndvi_values, dates, crop_type, latest_stage, _CROP_PROFILES
+        )
         if prediction:
+            prediction = finalize_prediction(prediction)
+            note = f"Based on {len(ndvi_values)} NDVI observations."
+            if prediction.get("note_suffix"):
+                note = f"{note} {prediction['note_suffix']}"
             return HarvestPredictionResponse(
                 land_id=land_id,
                 prediction_available=True,
@@ -399,7 +530,7 @@ def get_harvest_prediction(db: Session, land_id: int) -> Optional[HarvestPredict
                 estimated_harvest_end=prediction["estimated_harvest_end"],
                 days_to_harvest=prediction["days_to_harvest"],
                 confidence_level=prediction["confidence"],
-                note=f"Based on {len(ndvi_values)} NDVI observations.",
+                note=note,
             )
         return HarvestPredictionResponse(
             land_id=land_id,
@@ -408,10 +539,17 @@ def get_harvest_prediction(db: Session, land_id: int) -> Optional[HarvestPredict
             note="Could not compute harvest prediction.",
         )
 
-    # Use primary (first available) zone for backward-compat top-level fields
-    primary = next((z for z in zone_items if z.prediction_available), zone_items[0])
+    # Use nearest upcoming harvest across zones for top-level summary
+    available = [z for z in zone_items if z.prediction_available and z.days_to_harvest is not None]
+    if available:
+        primary = min(
+            available,
+            key=lambda z: z.days_to_harvest if z.days_to_harvest >= 0 else 10_000 + abs(z.days_to_harvest),
+        )
+    else:
+        primary = next((z for z in zone_items if z.prediction_available), zone_items[0])
 
-    return HarvestPredictionResponse(
+    response = HarvestPredictionResponse(
         land_id=land_id,
         prediction_available=primary.prediction_available,
         peak_ndvi=primary.peak_ndvi,
@@ -423,6 +561,11 @@ def get_harvest_prediction(db: Session, land_id: int) -> Optional[HarvestPredict
         note=primary.note,
         zones=zone_items,
     )
+    # Always recompute days from dates at response time
+    if response.estimated_harvest_start:
+        finalized = finalize_prediction(response.model_dump())
+        response.days_to_harvest = finalized.get("days_to_harvest")
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -437,10 +580,17 @@ def get_ndvi_comparison(db: Session, land_id: int, weeks: int = 8) -> Optional[d
     if land is None:
         return None
 
+    primary = repository.get_primary_crop_zone(db, land_id)
+    primary_zone_id = int(primary.zone_id) if primary else None
     imgs = repository.list_land_images(db, land_id, image_type="ndvi")
     snapshots = []
     for img in imgs:
-        ndvi_val = float(img.ndvi_mean) if img.ndvi_mean is not None else 0.0
+        ndvi_val = float(img.ndvi_mean) if img.ndvi_mean is not None else None
+        if ndvi_val is None:
+            joined = repository.find_crop_ndvi_near_date(
+                db, land_id, img.timestamp, zone_id=primary_zone_id
+            )
+            ndvi_val = joined if joined is not None else 0.0
         snapshots.append(NdviSnapshot(
             date=img.timestamp.strftime("%Y-%m-%d"),
             ndvi=ndvi_val,

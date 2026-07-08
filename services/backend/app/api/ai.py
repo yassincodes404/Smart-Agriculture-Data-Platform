@@ -347,15 +347,19 @@ def _run_analysis_background(
     land_id: int,
     user_id: int,
     land_public_id: str,
-    db: Session,
 ) -> None:
     """
     Background worker: runs AI analysis and creates a LandAlert notification
     when complete so the frontend bell rings.
+
+    NOTE: Creates its own DB session because FastAPI closes the request session
+    before background tasks run (DetachedInstanceError otherwise).
     """
+    from app.db.session import SessionLocal
+    db = SessionLocal()
     try:
         insights = run_ai_land_analysis(land_id=land_id, db=db, user_id=user_id)
-        
+
         # Create completion notification
         from app.models.land_alert import LandAlert
         if insights:
@@ -382,6 +386,8 @@ def _run_analysis_background(
         db.commit()
     except Exception as exc:
         logger.exception("Background AI analysis failed for land_id=%s: %s", land_id, exc)
+    finally:
+        db.close()
 
 
 @router.post("/ai/lands/{public_id}/analyze-async", status_code=status.HTTP_202_ACCEPTED)
@@ -402,6 +408,5 @@ def trigger_ai_analysis_async(
         land_id=land.land_id,
         user_id=current_user.user_id,
         land_public_id=public_id,
-        db=db,
     )
     return {"message": "AI analysis started in background. You will be notified when complete.", "status": "accepted"}

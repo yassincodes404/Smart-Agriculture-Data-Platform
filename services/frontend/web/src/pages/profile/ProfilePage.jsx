@@ -1,12 +1,12 @@
 /**
- * pages/profile/ProfilePage.jsx
- * -----------------------------
- * User profile with account info, statistics, and AI API key management.
+ * pages/profile/ProfilePage.jsx — Account, activity & AI API keys
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import { 
+import { useBreakpoint } from "../../hooks/useBreakpoint";
+import { useConfirm } from "../../context/ConfirmContext";
+import {
   listLands,
   getAiApiKeys,
   addAiApiKey,
@@ -14,15 +14,83 @@ import {
   toggleAiApiKey,
 } from "../../services/api";
 import "../Pages.css";
+import "./Profile.css";
+
+function ProfileStats({ loadingLands, landsCount, totalArea, activeKeys, className = "" }) {
+  return (
+    <div className={`profile-stats ${className}`.trim()}>
+      <div className="profile-stat">
+        <div className="profile-stat__value">{loadingLands ? "…" : landsCount}</div>
+        <div className="profile-stat__label">Lands</div>
+      </div>
+      <div className="profile-stat">
+        <div className="profile-stat__value">{loadingLands ? "…" : totalArea.toFixed(1)}</div>
+        <div className="profile-stat__label">Total ha</div>
+      </div>
+      <div className="profile-stat">
+        <div className="profile-stat__value">{activeKeys}</div>
+        <div className="profile-stat__label">AI Keys</div>
+      </div>
+    </div>
+  );
+}
+
+function ApiKeyCard({ keyItem, onToggle, onDelete }) {
+  const cardClass = keyItem.quota_exceeded
+    ? "profile-key-card--quota"
+    : keyItem.is_active
+      ? "profile-key-card--active"
+      : "profile-key-card--inactive";
+
+  return (
+    <div className={`profile-key-card ${cardClass}`}>
+      <div className="profile-key-card__top">
+        <div className="profile-key-card__info">
+          <div className="profile-key-card__label">{keyItem.label || `Key #${keyItem.key_id}`}</div>
+          <div className="profile-key-card__preview">••••••{keyItem.key_preview}</div>
+        </div>
+      </div>
+      <div className="profile-key-card__badges">
+        {keyItem.quota_exceeded ? (
+          <span className="badge badge--critical">Quota Exceeded</span>
+        ) : keyItem.is_active ? (
+          <span className="badge badge--healthy">Active</span>
+        ) : (
+          <span className="badge badge--neutral">Disabled</span>
+        )}
+        <span className="badge badge--info" style={{ textTransform: "capitalize" }}>
+          {keyItem.provider}
+        </span>
+      </div>
+      <div className="profile-key-card__actions">
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => onToggle(keyItem.key_id, keyItem.is_active)}
+        >
+          {keyItem.is_active ? "Disable" : "Enable"}
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          style={{ color: "var(--error)" }}
+          onClick={() => onDelete(keyItem.key_id)}
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const { user } = useAuth();
-  
-  // Lands state
+  const confirm = useConfirm();
+  const { isDrawer } = useBreakpoint();
+  const isMobileLayout = isDrawer;
+
   const [lands, setLands] = useState([]);
   const [loadingLands, setLoadingLands] = useState(true);
-
-  // AI API key state
   const [apiKeys, setApiKeys] = useState([]);
   const [newKey, setNewKey] = useState("");
   const [newKeyLabel, setNewKeyLabel] = useState("");
@@ -31,11 +99,9 @@ export default function ProfilePage() {
   const [keySuccess, setKeySuccess] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
-  // Load lands data
   useEffect(() => {
     let active = true;
-
-    async function loadLands() {
+    (async () => {
       try {
         const res = await listLands();
         if (active) setLands(res.lands || []);
@@ -44,15 +110,10 @@ export default function ProfilePage() {
       } finally {
         if (active) setLoadingLands(false);
       }
-    }
-
-    loadLands();
-    return () => {
-      active = false;
-    };
+    })();
+    return () => { active = false; };
   }, []);
 
-  // Load AI API keys
   useEffect(() => {
     loadKeys();
   }, []);
@@ -62,7 +123,7 @@ export default function ProfilePage() {
       const res = await getAiApiKeys();
       setApiKeys(res.keys || []);
     } catch {
-      // Not logged in or no keys yet — ignore
+      // ignore
     }
   };
 
@@ -86,7 +147,14 @@ export default function ProfilePage() {
   };
 
   const handleDeleteKey = async (keyId) => {
-    if (!window.confirm("Remove this API key?")) return;
+    const confirmed = await confirm({
+      title: "Remove API Key",
+      message: "Remove this API key? AI features may stop working if no other keys are active.",
+      confirmLabel: "Remove",
+      cancelLabel: "Cancel",
+      variant: "danger",
+    });
+    if (!confirmed) return;
     try {
       await deleteAiApiKey(keyId);
       await loadKeys();
@@ -106,6 +174,7 @@ export default function ProfilePage() {
 
   const initials = user?.email ? user.email.charAt(0).toUpperCase() : "?";
   const displayName = user?.email?.split("@")[0] || "User";
+  const activeKeyCount = apiKeys.filter((k) => k.is_active).length;
 
   const totalArea = useMemo(
     () => lands.reduce((sum, land) => sum + Number(land.area_hectares || 0), 0),
@@ -119,7 +188,7 @@ export default function ProfilePage() {
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, 4)
         .map((land) => ({
-          action: `Registered land ${land.name}`,
+          action: `Registered ${land.name}`,
           time: new Date(land.created_at).toLocaleDateString(),
           type: land.status === "error" ? "warning" : "success",
         })),
@@ -130,8 +199,15 @@ export default function ProfilePage() {
     ? new Date(user.created_at).toLocaleDateString()
     : "Not available";
 
+  const accountFields = [
+    { label: "Email", value: user?.email || "—" },
+    { label: "Role", value: (user?.role || "viewer"), capitalize: true },
+    { label: "Member Since", value: memberSince },
+    { label: "Tracking", value: "Per land setting" },
+  ];
+
   return (
-    <div className="anim-fade-in">
+    <div className={`anim-fade-in profile-page${isMobileLayout ? " profile-page--mobile" : ""}`}>
       <div className="page-header">
         <h1 className="page-header__title">My Profile</h1>
         <p className="page-header__subtitle">
@@ -139,166 +215,129 @@ export default function ProfilePage() {
         </p>
       </div>
 
-      <div className="profile-section">
-        <div className="profile-sidebar anim-stagger" style={{ "--stagger-index": 0 }}>
+      {/* Mobile compact hero */}
+      {isMobileLayout && (
+        <div className="profile-hero anim-stagger" style={{ "--stagger-index": 0 }}>
           <div className="profile-avatar">{initials}</div>
-          <div className="profile-name">{displayName}</div>
-          <div className="profile-email">{user?.email || "-"}</div>
-          <span className="badge badge--healthy" style={{ marginBottom: "var(--space-md)" }}>
-            {user?.role || "viewer"}
-          </span>
-          <div className="profile-stats">
-            <div className="profile-stat">
-              <div className="profile-stat__value">{loadingLands ? "..." : lands.length}</div>
-              <div className="profile-stat__label">Lands</div>
-            </div>
-            <div className="profile-stat">
-              <div className="profile-stat__value">
-                {loadingLands ? "..." : totalArea.toFixed(1)}
-              </div>
-              <div className="profile-stat__label">Total ha</div>
-            </div>
-            <div className="profile-stat">
-              <div className="profile-stat__value">
-                {apiKeys.filter((k) => k.is_active).length}
-              </div>
-              <div className="profile-stat__label">Active AI Keys</div>
-            </div>
+          <div className="profile-hero__body">
+            <div className="profile-name">{displayName}</div>
+            <div className="profile-email">{user?.email || "—"}</div>
+            <span className="badge badge--healthy profile-role-badge">
+              {user?.role || "viewer"}
+            </span>
           </div>
         </div>
+      )}
 
-        <div>
-          <div className="section-header">
-            <h2 className="section-header__title">Account Information</h2>
-          </div>
-          <div
-            className="card card--no-hover anim-stagger"
-            style={{ "--stagger-index": 1, marginBottom: "var(--space-xl)" }}
-          >
-            <div className="grid-2" style={{ gap: "var(--space-lg)" }}>
-              <div>
-                <div className="text-overline" style={{ marginBottom: "var(--space-xs)" }}>Email</div>
-                <div className="text-body">{user?.email || "-"}</div>
-              </div>
-              <div>
-                <div className="text-overline" style={{ marginBottom: "var(--space-xs)" }}>Role</div>
-                <div className="text-body" style={{ textTransform: "capitalize" }}>
-                  {user?.role || "viewer"}
-                </div>
-              </div>
-              <div>
-                <div className="text-overline" style={{ marginBottom: "var(--space-xs)" }}>Member Since</div>
-                <div className="text-body">{memberSince}</div>
-              </div>
-              <div>
-                <div className="text-overline" style={{ marginBottom: "var(--space-xs)" }}>Tracking Frequency</div>
-                <div className="text-body">Per land setting</div>
-              </div>
+      {isMobileLayout && (
+        <div className="anim-stagger" style={{ "--stagger-index": 0.5 }}>
+          <ProfileStats
+            loadingLands={loadingLands}
+            landsCount={lands.length}
+            totalArea={totalArea}
+            activeKeys={activeKeyCount}
+            className="profile-stats--mobile"
+          />
+        </div>
+      )}
+
+      <div className="profile-section">
+        {/* Desktop sidebar */}
+        <div className="profile-sidebar profile-sidebar--desktop-only anim-stagger" style={{ "--stagger-index": 0 }}>
+          <div className="profile-avatar">{initials}</div>
+          <div className="profile-name">{displayName}</div>
+          <div className="profile-email">{user?.email || "—"}</div>
+          <span className="badge badge--healthy profile-role-badge">
+            {user?.role || "viewer"}
+          </span>
+          <ProfileStats
+            loadingLands={loadingLands}
+            landsCount={lands.length}
+            totalArea={totalArea}
+            activeKeys={activeKeyCount}
+          />
+        </div>
+
+        <div className="profile-main">
+          {/* Account */}
+          <section className="anim-stagger" style={{ "--stagger-index": 1 }}>
+            <div className="profile-block__header">
+              <h2 className="profile-block__title">Account Information</h2>
             </div>
-          </div>
-
-          <div className="section-header">
-            <h2 className="section-header__title">Recent Activity</h2>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-            {recentActivity.length === 0 && (
-              <div className="card card--no-hover" style={{ padding: "var(--space-md)" }}>
-                <span className="text-body-sm">
-                  {loadingLands ? "Loading activity..." : "No land activity yet."}
-                </span>
-              </div>
-            )}
-
-            {recentActivity.map((item, i) => (
-              <div
-                className="card card--no-hover anim-stagger"
-                style={{
-                  "--stagger-index": i + 2,
-                  padding: "var(--space-md)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "var(--space-md)",
-                }}
-                key={`${item.action}-${item.time}`}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-                  <div
-                    className={`logs-table__dot logs-table__dot--${item.type}`}
-                    style={{ width: 8, height: 8, borderRadius: "50%" }}
-                  />
-                  <span className="text-body-sm" style={{ color: "var(--text-primary)" }}>
-                    {item.action}
+            <div className="profile-info-card">
+              {accountFields.map((field) => (
+                <div key={field.label} className="profile-info-row">
+                  <span className="profile-info-row__label">{field.label}</span>
+                  <span
+                    className="profile-info-row__value"
+                    style={field.capitalize ? { textTransform: "capitalize" } : undefined}
+                  >
+                    {field.value}
                   </span>
                 </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Activity */}
+          <section className="anim-stagger" style={{ "--stagger-index": 2 }}>
+            <div className="profile-block__header">
+              <h2 className="profile-block__title">Recent Activity</h2>
+            </div>
+            <div className="profile-activity-list">
+              {recentActivity.length === 0 && (
+                <div className="profile-activity-item">
+                  <span className="text-body-sm" style={{ color: "var(--text-secondary)" }}>
+                    {loadingLands ? "Loading activity…" : "No land activity yet."}
+                  </span>
+                </div>
+              )}
+              {recentActivity.map((item) => (
+                <div key={`${item.action}-${item.time}`} className="profile-activity-item">
+                  <span className={`profile-activity-item__dot profile-activity-item__dot--${item.type}`} />
+                  <div className="profile-activity-item__body">
+                    <span className="profile-activity-item__text">{item.action}</span>
+                    <span className="profile-activity-item__time">{item.time}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* AI API Keys */}
+          <section className="anim-stagger" style={{ "--stagger-index": 3 }}>
+            <div className="profile-block__header profile-block__header--keys">
+              <div className="profile-block__title-row">
+                <h2 className="profile-block__title">AI API Keys</h2>
+                <span className="profile-groq-badge">✨ Groq</span>
               </div>
-            ))}
-          </div>
-
-          {/* ─── AI API Key Management ─────────────────────────────── */}
-          <div className="section-header" style={{ marginTop: "var(--space-xl)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
-              <h2 className="section-header__title">AI API Keys</h2>
-              <span style={{
-                background: "linear-gradient(135deg, #f97316, #ea580c)",
-                color: "#fff",
-                fontSize: 10,
-                fontWeight: 700,
-                padding: "2px 8px",
-                borderRadius: "var(--radius-full)",
-              }}>✨ Groq</span>
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                onClick={() => setShowAddForm(!showAddForm)}
+              >
+                {showAddForm ? "Cancel" : "+ Add Key"}
+              </button>
             </div>
-            <button
-              className="btn btn--primary btn--sm"
-              onClick={() => setShowAddForm(!showAddForm)}
-            >
-              + Add Key
-            </button>
-          </div>
 
-          {/* Status messages */}
-          {keyError && (
-            <div style={{
-              background: "var(--error-light)",
-              border: "1px solid var(--error-border)",
-              borderRadius: "var(--radius-md)",
-              padding: "var(--space-sm) var(--space-md)",
-              marginBottom: "var(--space-md)",
-              fontSize: 13,
-              color: "var(--error)",
-            }}>
-              {keyError}
-            </div>
-          )}
-          {keySuccess && (
-            <div style={{
-              background: "var(--success-light, #f0fdf4)",
-              border: "1px solid var(--success-border, #86efac)",
-              borderRadius: "var(--radius-md)",
-              padding: "var(--space-sm) var(--space-md)",
-              marginBottom: "var(--space-md)",
-              fontSize: 13,
-              color: "var(--green-600)",
-            }}>
-              {keySuccess}
-            </div>
-          )}
+            {keyError && <div className="profile-alert profile-alert--error">{keyError}</div>}
+            {keySuccess && <div className="profile-alert profile-alert--success">{keySuccess}</div>}
 
-          {/* Add Key Form */}
-          {showAddForm && (
-            <div className="card card--no-hover anim-stagger" style={{ "--stagger-index": 2, marginBottom: "var(--space-md)", borderLeft: "3px solid #7c3aed" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-                <div>
+            {showAddForm && (
+              <div className="profile-key-form">
+                <div className="form-group">
                   <label className="form-label">Key Label (optional)</label>
                   <input
                     className="form-control"
-                    placeholder='e.g. "Primary Key", "Backup 1"'
+                    placeholder='e.g. "Primary Key"'
                     value={newKeyLabel}
                     onChange={(e) => setNewKeyLabel(e.target.value)}
                   />
                 </div>
-                <div>
-                  <label className="form-label">Groq API Key <span style={{ color: "var(--error)" }}>*</span></label>
+                <div className="form-group">
+                  <label className="form-label">
+                    Groq API Key <span style={{ color: "var(--error)" }}>*</span>
+                  </label>
                   <input
                     className="form-control"
                     placeholder="gsk_..."
@@ -306,18 +345,22 @@ export default function ProfilePage() {
                     value={newKey}
                     onChange={(e) => setNewKey(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && handleAddKey()}
+                    autoComplete="off"
                   />
                   <span className="text-caption" style={{ marginTop: 4, display: "block" }}>
                     Get your key at{" "}
                     <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" style={{ color: "#f97316" }}>
                       console.groq.com
                     </a>
-                    . Keys are stored securely and never fully displayed.
+                    . Keys are stored securely.
                   </span>
                 </div>
-                <div style={{ display: "flex", gap: "var(--space-sm)", justifyContent: "flex-end" }}>
-                  <button className="btn btn--ghost btn--sm" onClick={() => setShowAddForm(false)}>Cancel</button>
+                <div className="profile-key-form__actions">
+                  <button type="button" className="btn btn--ghost btn--sm" onClick={() => setShowAddForm(false)}>
+                    Cancel
+                  </button>
                   <button
+                    type="button"
                     className="btn btn--primary btn--sm"
                     onClick={handleAddKey}
                     disabled={addingKey || !newKey.trim()}
@@ -326,87 +369,38 @@ export default function ProfilePage() {
                   </button>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Key list */}
-          <div className="anim-stagger" style={{ "--stagger-index": 3, display: "flex", flexDirection: "column", gap: "var(--space-sm)", marginBottom: "var(--space-xl)" }}>
-            {apiKeys.length === 0 && !showAddForm && (
-              <div className="card card--no-hover" style={{ textAlign: "center", padding: "var(--space-xl)", opacity: 0.7 }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>🔑</div>
-                <div className="text-body-sm">No API keys yet.</div>
-                <div className="text-caption">Add a Groq API key to enable AI crop analysis and chat.</div>
+            <div className="profile-keys-list">
+              {apiKeys.length === 0 && !showAddForm && (
+                <div className="profile-keys-empty">
+                  <div className="profile-keys-empty__icon">🔑</div>
+                  <div className="text-body-sm" style={{ fontWeight: 600 }}>No API keys yet</div>
+                  <div className="text-caption" style={{ marginTop: 4 }}>
+                    Add a Groq API key to enable AI crop analysis and chat.
+                  </div>
+                </div>
+              )}
+              {apiKeys.map((key) => (
+                <ApiKeyCard
+                  key={key.key_id}
+                  keyItem={key}
+                  onToggle={handleToggleKey}
+                  onDelete={handleDeleteKey}
+                />
+              ))}
+            </div>
+
+            {apiKeys.length > 0 && (
+              <div className="profile-keys-hint">
+                <div className="profile-keys-hint__title">✨ How key rotation works</div>
+                <div className="profile-keys-hint__body">
+                  Keys are tried in order. If one hits its quota, the system skips it and tries the next.
+                  Quota-exceeded keys re-enable automatically after 1 hour.
+                </div>
               </div>
             )}
-            {apiKeys.map((key) => (
-              <div
-                key={key.key_id}
-                className="card card--no-hover"
-                style={{
-                  padding: "var(--space-md)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  opacity: key.is_active ? 1 : 0.5,
-                  borderLeft: key.quota_exceeded ? "3px solid var(--error)" : key.is_active ? "3px solid var(--green-500)" : "3px solid var(--border-subtle)",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--space-md)" }}>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>
-                      {key.label || `Key #${key.key_id}`}
-                    </div>
-                    <div className="text-caption" style={{ fontFamily: "monospace", letterSpacing: "0.1em" }}>
-                      ••••••{key.key_preview}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: "var(--space-xs)" }}>
-                    {key.quota_exceeded ? (
-                      <span className="badge badge--critical" style={{ fontSize: 10 }}>Quota Exceeded</span>
-                    ) : key.is_active ? (
-                      <span className="badge badge--healthy" style={{ fontSize: 10 }}>Active</span>
-                    ) : (
-                      <span className="badge badge--neutral" style={{ fontSize: 10 }}>Disabled</span>
-                    )}
-                    <span className="badge badge--info" style={{ fontSize: 10, textTransform: "capitalize" }}>
-                      {key.provider}
-                    </span>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: "var(--space-sm)" }}>
-                  <button
-                    className="btn btn--ghost btn--sm"
-                    onClick={() => handleToggleKey(key.key_id, key.is_active)}
-                    title={key.is_active ? "Disable key" : "Enable key"}
-                  >
-                    {key.is_active ? "Disable" : "Enable"}
-                  </button>
-                  <button
-                    className="btn btn--ghost btn--sm"
-                    style={{ color: "var(--error)" }}
-                    onClick={() => handleDeleteKey(key.key_id)}
-                    title="Remove key"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* How It Works */}
-          {apiKeys.length > 0 && (
-            <div className="card card--no-hover" style={{ padding: "var(--space-md)", background: "var(--info-light)", border: "1px solid var(--info-border, #bfdbfe)" }}>
-              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4, color: "var(--info)" }}>
-                ✨ How key rotation works
-              </div>
-              <div className="text-caption" style={{ lineHeight: 1.6 }}>
-                Keys are tried in order (top to bottom). If a key hits its quota limit,
-                the system automatically skips it and tries the next available key.
-                Quota-exceeded keys are automatically re-enabled after 1 hour.
-              </div>
-            </div>
-          )}
+          </section>
         </div>
       </div>
     </div>

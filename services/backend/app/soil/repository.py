@@ -38,6 +38,10 @@ def upsert_soil_profile(
     depth_profile: Optional[dict[str, Any]] = None,
     suitability_score: Optional[float] = None,
     source_id: Optional[int] = None,
+    fetch_status: Optional[str] = None,
+    fetch_attempts: Optional[int] = None,
+    last_fetch_error: Optional[str] = None,
+    trust_tier: Optional[str] = None,
 ) -> LandSoilProfile:
     """
     Insert or update the soil profile for a land.
@@ -60,6 +64,16 @@ def upsert_soil_profile(
         existing.depth_profile     = depth_profile
         existing.suitability_score = _dec(suitability_score)
         existing.source_id         = source_id
+        if fetch_status is not None:
+            existing.fetch_status = fetch_status
+        if fetch_attempts is not None:
+            existing.fetch_attempts = fetch_attempts
+        if last_fetch_error is not None:
+            existing.last_fetch_error = last_fetch_error
+        elif fetch_status == "success":
+            existing.last_fetch_error = None
+        if trust_tier is not None:
+            existing.trust_tier = trust_tier
         from datetime import datetime, timezone
         existing.fetched_at = datetime.now(timezone.utc)
         db.flush()
@@ -79,7 +93,41 @@ def upsert_soil_profile(
         depth_profile=depth_profile,
         suitability_score=_dec(suitability_score),
         source_id=source_id,
+        fetch_status=fetch_status,
+        fetch_attempts=fetch_attempts or 0,
+        last_fetch_error=last_fetch_error,
+        trust_tier=trust_tier,
     )
     db.add(row)
     db.flush()
     return row
+
+
+def upsert_soil_fetch_status(
+    db: Session,
+    land_id: int,
+    *,
+    fetch_status: str,
+    fetch_attempts: int,
+    last_fetch_error: Optional[str] = None,
+    trust_tier: Optional[str] = None,
+) -> LandSoilProfile:
+    """Record a failed SoilGrids fetch without overwriting prior successful data."""
+    existing = get_soil_profile(db, land_id)
+    if existing is not None and existing.depth_profile is not None:
+        existing.fetch_status = fetch_status
+        existing.fetch_attempts = fetch_attempts
+        existing.last_fetch_error = last_fetch_error
+        if trust_tier is not None:
+            existing.trust_tier = trust_tier
+        db.flush()
+        return existing
+
+    return upsert_soil_profile(
+        db,
+        land_id,
+        fetch_status=fetch_status,
+        fetch_attempts=fetch_attempts,
+        last_fetch_error=last_fetch_error,
+        trust_tier=trust_tier,
+    )

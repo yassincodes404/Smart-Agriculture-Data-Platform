@@ -1,0 +1,31 @@
+.trust-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
+
+.trust-badge--verified {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.trust-badge--observed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.trust-badge--estimated {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.trust-badge--unavailable {
+  background: #f3f4f6;
+  color: #6b7280;
+}

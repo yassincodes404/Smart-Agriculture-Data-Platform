@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
 
-export default function VegetationChart({ history }) {
+export default function VegetationChart({ history, subtitle }) {
   // Responsive height for mobile - hooks must be unconditional
   const [chartHeight, setChartHeight] = useState(280);
   const [isSmallScreen, setIsSmallScreen] = useState(false);
@@ -38,7 +38,10 @@ export default function VegetationChart({ history }) {
 
   return (
     <div className="vegetation-chart" style={{ height: chartHeight }}>
-      <h3>Vegetation Indices (ML Features)</h3>
+      <h3>
+        Vegetation Indices (ML Features)
+        {subtitle && <span className="text-caption" style={{ display: "block", fontWeight: 400, marginTop: 2 }}>{subtitle}</span>}
+      </h3>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 5, right: 12, left: -12, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />

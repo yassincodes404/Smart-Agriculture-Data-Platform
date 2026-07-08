@@ -43,13 +43,25 @@ def get_soil_profile(db: Session, land_id: int) -> Optional[SoilProfileResponse]
 
     profile = soil_repo.get_soil_profile(db, land_id)
     if profile is None or profile.depth_profile is None:
+        fetch_status = getattr(profile, "fetch_status", None) if profile else None
+        retry_available = fetch_status in ("timeout", "error", "empty") or profile is None
+        source = "ISRIC-SoilGrids-v2 (not yet fetched)"
+        if fetch_status == "timeout":
+            source = "ISRIC-SoilGrids-v2 (fetch timed out)"
+        elif fetch_status == "error":
+            source = "ISRIC-SoilGrids-v2 (fetch failed)"
         return SoilProfileResponse(
             land_id=land_id,
             profile_available=False,
-            fetched_at=None,
+            fetched_at=profile.fetched_at.isoformat() if profile and profile.fetched_at else None,
             texture_class=None,
             properties=[],
-            source="ISRIC-SoilGrids-v2 (not yet fetched)",
+            source=source,
+            fetch_status=fetch_status,
+            fetch_attempts=getattr(profile, "fetch_attempts", None) if profile else None,
+            last_fetch_error=getattr(profile, "last_fetch_error", None) if profile else None,
+            trust_tier=getattr(profile, "trust_tier", None) if profile else "unavailable",
+            retry_available=retry_available,
         )
 
     props: list[SoilProperty] = []
@@ -85,6 +97,11 @@ def get_soil_profile(db: Session, land_id: int) -> Optional[SoilProfileResponse]
         texture_class=profile.texture_class,
         properties=props,
         source="ISRIC-SoilGrids-v2",
+        fetch_status=getattr(profile, "fetch_status", None) or "success",
+        fetch_attempts=getattr(profile, "fetch_attempts", None),
+        last_fetch_error=getattr(profile, "last_fetch_error", None),
+        trust_tier=getattr(profile, "trust_tier", None) or "observed",
+        retry_available=False,
     )
 
 

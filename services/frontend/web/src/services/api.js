@@ -287,8 +287,12 @@ export async function exportLand(landId) {
  * GET /api/v1/lands/{landId}/timeseries?metric=climate|water|crops|soil
  * Response: { land_id, metric, points: [{ timestamp, value, payload }] }
  */
-export async function getLandTimeseries(landId, metric = "climate") {
-  return request(`/lands/${landId}/timeseries?metric=${metric}`);
+export async function getLandTimeseries(landId, metric = "climate", zoneId = null) {
+  let url = `/lands/${landId}/timeseries?metric=${metric}`;
+  if (zoneId != null && metric === "crops") {
+    url += `&zone_id=${zoneId}`;
+  }
+  return request(url);
 }
 
 /**
@@ -300,6 +304,134 @@ export async function getLandImages(landId, imageType = null) {
   return request(`/lands/${landId}/images${qs}`);
 }
 
+const imageBlobCache = new Map();
+const imageFetchInflight = new Map();
+const IMAGE_FETCH_CONCURRENCY = 4;
+
+function normalizeImagePath(imageUrl) {
+  if (!imageUrl) return null;
+  if (imageUrl.startsWith("blob:")) return imageUrl;
+  if (imageUrl.startsWith(API_BASE)) return imageUrl.slice(API_BASE.length);
+  if (imageUrl.startsWith("/api/v1")) return imageUrl.slice("/api/v1".length);
+  return imageUrl;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchImageBlob(path, attempt = 0) {
+  let token = getToken();
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (res.status === 401 && getRefreshToken() && attempt < 2) {
+    try {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        token = await refreshAccessToken();
+        isRefreshing = false;
+        onRefreshed(token);
+      } else {
+        token = await new Promise((resolve) => {
+          subscribeTokenRefresh(resolve);
+        });
+      }
+      return fetchImageBlob(path, attempt + 1);
+    } catch {
+      clearToken();
+      return null;
+    }
+  }
+
+  if (res.status === 429 && attempt < 4) {
+    const retryAfter = Number.parseInt(res.headers.get("Retry-After") || "2", 10);
+    await sleep(Math.max(retryAfter, 1) * 1000);
+    return fetchImageBlob(path, attempt + 1);
+  }
+
+  if (!res.ok) return null;
+  return res.blob();
+}
+
+/**
+ * Fetch a protected image URL with the auth token and return a blob: URL.
+ * Browser <img> tags cannot send Authorization headers on their own.
+ */
+export async function resolveAuthenticatedImageUrl(imageUrl) {
+  const path = normalizeImagePath(imageUrl);
+  if (!path || path.startsWith("blob:")) return path;
+
+  if (imageBlobCache.has(path)) {
+    return imageBlobCache.get(path);
+  }
+  if (imageFetchInflight.has(path)) {
+    return imageFetchInflight.get(path);
+  }
+
+  const promise = (async () => {
+    const blob = await fetchImageBlob(path);
+    if (!blob) return null;
+    const blobUrl = URL.createObjectURL(blob);
+    imageBlobCache.set(path, blobUrl);
+    return blobUrl;
+  })().finally(() => {
+    imageFetchInflight.delete(path);
+  });
+
+  imageFetchInflight.set(path, promise);
+  return promise;
+}
+
+async function mapWithConcurrency(items, mapper, limit = IMAGE_FETCH_CONCURRENCY) {
+  if (!items.length) return [];
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const current = nextIndex;
+      nextIndex += 1;
+      results[current] = await mapper(items[current], current);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}
+
+export async function resolveLandImageGallery(images = []) {
+  return mapWithConcurrency(images || [], async (img) => {
+    if (!img?.image_url) return img;
+    const blobUrl = await resolveAuthenticatedImageUrl(img.image_url);
+    if (!blobUrl) return img;
+    return { ...img, image_url: blobUrl, _blobUrl: true, _cached: imageBlobCache.has(normalizeImagePath(img.image_url)) };
+  });
+}
+
+export function isImageBlobCached(imageUrl) {
+  const path = normalizeImagePath(imageUrl);
+  return Boolean(path && imageBlobCache.has(path));
+}
+
+export function revokeBlobImageUrls(images = []) {
+  (images || []).forEach((img) => {
+    if (
+      img?._blobUrl &&
+      !img?._cached &&
+      typeof img.image_url === "string" &&
+      img.image_url.startsWith("blob:")
+    ) {
+      URL.revokeObjectURL(img.image_url);
+    }
+  });
+}
+
 /**
  * GET /api/v1/lands/{landId}/crop-zones
  * Response: { land_id, total_zones, zones: [...] }
@@ -308,13 +440,30 @@ export async function getCropZones(landId) {
   return request(`/lands/${landId}/crop-zones`);
 }
 
+export async function getCropDetection(landId) {
+  return request(`/lands/${landId}/crop-detection`);
+}
+
+export async function getTrustSummary(landId) {
+  return request(`/lands/${landId}/trust-summary`);
+}
+
+export async function declarePrimaryCrop(landId, { crop_type, notes }) {
+  return request(`/lands/${landId}/declared-crops`, {
+    method: "POST",
+    body: JSON.stringify({ crop_type, notes }),
+  });
+}
+
 /**
  * POST /api/v1/lands/{landId}/analyze
  * Triggers a background re-analysis: fetch new satellite images, recompute NDVI.
  * Old images and data are preserved — only new data is appended.
  */
-export async function reanalyzeLand(landId) {
-  return request(`/lands/${landId}/analyze`, { method: "POST" });
+export async function reanalyzeLand(landId, refreshSections = ["environment", "satellite", "crops"]) {
+  const refresh = Array.isArray(refreshSections) ? refreshSections.join(",") : refreshSections;
+  const qs = refresh ? `?refresh=${encodeURIComponent(refresh)}` : "";
+  return request(`/lands/${landId}/analyze${qs}`, { method: "POST" });
 }
 
 /**
@@ -386,6 +535,11 @@ export async function getCropHealth(landId) {
   return request(`/lands/${landId}/crop-health`);
 }
 
+/** POST /api/v1/lands/{landId}/crop-health/refresh — recompute + persist zone health */
+export async function refreshCropHealth(landId) {
+  return request(`/lands/${landId}/crop-health/refresh`, { method: "POST" });
+}
+
 /** GET /api/v1/lands/{landId}/crop-status */
 export async function getCropStatus(landId) {
   return request(`/lands/${landId}/crop-status`);
@@ -401,11 +555,6 @@ export async function getHarvestPrediction(landId) {
   return request(`/lands/${landId}/harvest-prediction`);
 }
 
-/** GET /api/v1/lands/{landId}/crop-detection */
-export async function getCropDetection(landId) {
-  return request(`/lands/${landId}/crop-detection`);
-}
-
 /* ----------------------------------------------------------------
    Soil Intelligence Endpoints
    Backend: app/api/soil.py
@@ -414,6 +563,11 @@ export async function getCropDetection(landId) {
 /** GET /api/v1/lands/{landId}/soil-profile */
 export async function getSoilProfile(landId) {
   return request(`/lands/${landId}/soil-profile`);
+}
+
+/** POST /api/v1/lands/{landId}/soil-profile/retry */
+export async function retrySoilProfile(landId) {
+  return request(`/lands/${landId}/soil-profile/retry`, { method: "POST" });
 }
 
 /** GET /api/v1/lands/{landId}/soil-suitability */

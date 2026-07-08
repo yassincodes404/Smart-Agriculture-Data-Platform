@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 OPEN_METEO_FORECAST = "https://api.open-meteo.com/v1/forecast"
 OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 
+# Open-Meteo archive API has a short publication lag; 2 days is typically safe.
+ARCHIVE_LAG_DAYS = 2
+
 
 # ---------------------------------------------------------------------------
 # Current conditions (used by discovery pipeline)
@@ -99,7 +102,7 @@ def fetch_soil_and_et0(
           et0_fao_evapotranspiration is only available as a DAILY variable.
           We make two separate API calls and merge the results.
     """
-    end_date = date.today() - timedelta(days=5)      # 5-day archive lag
+    end_date = date.today() - timedelta(days=ARCHIVE_LAG_DAYS)
     start_date = end_date - timedelta(days=days - 1)
     start_str = start_date.isoformat()
     end_str = end_date.isoformat()
@@ -190,7 +193,7 @@ def fetch_historical_climate(
     Soil moisture is fetched hourly (noon reading) in a second call and merged.
     Returns None on error.
     """
-    end_date = date.today() - timedelta(days=5)
+    end_date = date.today() - timedelta(days=ARCHIVE_LAG_DAYS)
     start_date = end_date - timedelta(days=days - 1)
     start_str = start_date.isoformat()
     end_str = end_date.isoformat()

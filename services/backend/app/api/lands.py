@@ -4,13 +4,13 @@ api/lands.py
 Land registration (GeoJSON polygon), time-series reads, and image gallery.
 """
 
-from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.dependencies import get_current_user_optional, get_db
 from app.models.user import User
 from app.lands.schemas import (
@@ -24,8 +24,6 @@ from app.lands.schemas import (
 )
 from app.lands import service
 from app.pipeline.land_discovery_pipeline import run_in_session
-from app.lands.repository import list_recent_alerts
-from app.models.land_alert import LandAlert
 
 # New centralized security layer
 from app.security import require_land_access
@@ -42,9 +40,11 @@ def list_lands(db: Session = Depends(get_db), current_user: Optional[User] = Dep
     """Return all lands as a lightweight list."""
     if current_user and current_user.role == "admin":
         return service.list_all_lands(db)
-    elif current_user:
+    if current_user:
         return service.list_all_lands(db, user_id=current_user.user_id)
-    return service.list_all_lands(db) # For non-auth dev if allowed
+    if settings.APP_ENV == "development":
+        return service.list_all_lands(db)
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
 @router.post(
     "/lands/discover",
@@ -121,10 +121,11 @@ def get_land_detail(
 def get_land_timeseries(
     public_id: str,
     metric: str = Query("climate", pattern="^(climate|water|crops|soil)$"),
+    zone_id: Optional[int] = Query(None, description="Crop zone filter (crops metric only)"),
     land = Depends(require_land_access),
     db: Session = Depends(get_db),
 ):
-    result = service.land_timeseries(db, land.land_id, metric)  # internal id for service
+    result = service.land_timeseries(db, land.land_id, metric, zone_id=zone_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
     return result
@@ -157,13 +158,9 @@ from app.lands import repository
 def get_land_image_content(
     public_id: str,
     image_id: int,
+    land=Depends(require_land_access),
     db: Session = Depends(get_db),
 ):
-    from app.models.land import Land
-    land = db.query(Land).filter_by(public_id=public_id, is_deleted=False).first()
-    if not land:
-        raise HTTPException(status_code=404, detail="Land not found")
-        
     image = db.query(service.repository.LandImage).filter_by(id=image_id, land_id=land.land_id).first()
     if not image:
         raise HTTPException(status_code=404, detail="Image not found")
@@ -200,21 +197,32 @@ def list_crop_zones(
 def reanalyze_land(
     public_id: str,
     background_tasks: BackgroundTasks,
+    refresh: str = Query(
+        "environment,satellite,crops",
+        description="Comma-separated sections to refresh: environment, satellite, crops",
+    ),
     land = Depends(require_land_access),
     db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """
-    Queue a background task to:
-    1. Fetch the latest Sentinel-2 images (true color + NDVI)
-    2. Recompute crop health, growth stage, and yield estimates
-    Old images and data are always preserved — only new data is appended.
+    Queue a background task to refresh selected data sections.
+
+    - **environment** — re-fetch Open-Meteo climate, soil moisture, and water (last 30 days)
+    - **satellite** — fetch new Sentinel-2 thumbnails (true color + NDVI)
+    - **crops** — recompute NDVI time-series and crop zones
+
+    Old data outside the environment refresh window is preserved.
     """
     land_id = land.land_id
+    from app.pipeline.land_discovery_pipeline import parse_refresh_sections
+
+    sections = parse_refresh_sections(refresh)
 
     from app.tasks.sentinel_task import run_sentinel_visual_fetch
     from app.tasks.crop_task import run_crop_detection_task
     from app.ai.land_analyst import run_ai_land_analysis
+    from app.pipeline.land_discovery_pipeline import refresh_environment_data
     
     uid = current_user.user_id if current_user else None
 
@@ -228,23 +236,30 @@ def reanalyze_land(
                 if l:
                     l.status = msg
                     local_db.commit()
-                    
-            update_progress("Downloading visual Sentinel-2 thumbnails...")
-            run_sentinel_visual_fetch(land_id, local_db, update_progress=update_progress)
-            
-            # Wipe existing for a clean re-analysis in demo
-            from sqlalchemy import text
-            local_db.execute(text("DELETE FROM land_crops WHERE land_id=:lid"), {"lid": land_id})
-            local_db.commit()
-            
-            # Run the new tile-level ML pipeline
-            update_progress("Fetching real STAC arrays and running ML multi-crop detection...")
-            run_crop_detection_task(land_id, local_db, days=365)
 
-            # Generate new AI Insights
-            update_progress("Generating AI insights via Groq Vision...")
-            run_ai_land_analysis(land_id, local_db, user_id=uid)
-            
+            if "environment" in sections:
+                refresh_environment_data(
+                    land_id,
+                    local_db,
+                    days=30,
+                    update_progress=update_progress,
+                )
+
+            if "satellite" in sections:
+                update_progress("Downloading visual Sentinel-2 thumbnails...")
+                run_sentinel_visual_fetch(land_id, local_db, update_progress=update_progress)
+
+            if "crops" in sections:
+                from sqlalchemy import text
+                local_db.execute(text("DELETE FROM land_crops WHERE land_id=:lid"), {"lid": land_id})
+                local_db.commit()
+                update_progress("Fetching real STAC arrays and running ML multi-crop detection...")
+                run_crop_detection_task(land_id, local_db, days=365)
+
+            if sections:
+                update_progress("Generating AI insights via Groq Vision...")
+                run_ai_land_analysis(land_id, local_db, user_id=uid)
+
             update_progress("active")
         except Exception as e:
             import logging
@@ -264,9 +279,14 @@ def reanalyze_land(
             "reanalyze_land",
             target_type="land",
             target_id=land_id,
+            details={"refresh": sorted(sections)},
         )
 
-    return {"status": "processing", "message": "Re-analysis queued. New images will appear shortly."}
+    return {
+        "status": "processing",
+        "message": "Re-analysis queued.",
+        "refresh": sorted(sections),
+    }
 
 
 from pydantic import BaseModel as _PydanticBase
@@ -368,61 +388,4 @@ def export_land(
     )
 
 
-# ---------------------------------------------------------------------------
-# Notifications / Alerts (for topbar)
-# ---------------------------------------------------------------------------
 
-@router.get(
-    "/notifications",
-    summary="Get recent alerts/notifications for the user (demo: all unresolved)",
-)
-def list_notifications(
-    db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user_optional),
-    limit: int = Query(10, le=50),
-):
-    """Returns recent unresolved alerts. In real app would filter by user's lands."""
-    alerts = list_recent_alerts(db, limit=limit, unresolved_only=True)
-    items = [
-        {
-            "id": a.id,
-            "land_id": a.land_id,
-            "timestamp": a.timestamp.isoformat(),
-            "alert_type": a.alert_type,
-            "severity": a.severity,
-            "message": a.message,
-            "payload": a.payload,
-        }
-        for a in alerts
-    ]
-
-    # Synthetic fallback so notifications are always visible for demo / UI testing
-    # Real alerts come from monitoring pipeline inserting LandAlert rows.
-    if not items:
-        now = datetime.utcnow().isoformat() + "Z"
-        items = [
-            {
-                "id": -101,
-                "land_id": None,
-                "timestamp": now,
-                "alert_type": "system",
-                "severity": "low",
-                "message": "No backend alerts yet. Real ones (ndvi_drop, drought, heat_stress) appear here after monitoring runs.",
-                "payload": None,
-            },
-            {
-                "id": -102,
-                "land_id": 1,
-                "timestamp": now,
-                "alert_type": "ui_message",
-                "severity": "medium",
-                "message": "Tip: Use the bell menu to generate UI alerts or wait for automated analysis.",
-                "payload": {"note": "synthetic"},
-            },
-        ][:limit]
-
-    return {
-        "status": "success",
-        "data": items,
-        "meta": {"count": len(items), "unresolved_only": True, "synthetic": len(alerts) == 0},
-    }

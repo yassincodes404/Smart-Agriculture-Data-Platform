@@ -305,7 +305,22 @@ def predict_harvest_window(
     if len(ndvi_series) < 3 or len(dates) != len(ndvi_series):
         return None
 
-    peak_idx = ndvi_series.index(max(ndvi_series))
+    # Prefer peak within the trailing observation window (handles ongoing seasons)
+    try:
+        from datetime import datetime as _dt
+        latest_date = _dt.strptime(dates[-1], "%Y-%m-%d").date()
+        cutoff = latest_date - __import__("datetime").timedelta(days=120)
+        window_indices = [
+            i for i, d in enumerate(dates)
+            if _dt.strptime(d, "%Y-%m-%d").date() >= cutoff
+        ]
+    except (ValueError, IndexError):
+        window_indices = list(range(len(ndvi_series)))
+
+    if not window_indices:
+        window_indices = list(range(len(ndvi_series)))
+
+    peak_idx = max(window_indices, key=lambda i: ndvi_series[i])
     peak_date_str = dates[peak_idx]
     peak_ndvi = ndvi_series[peak_idx]
 

@@ -42,6 +42,7 @@ from app.api.soil import router as soil_router
 from app.api.ai import router as ai_router
 from app.api.activity_logs import router as activity_logs_router
 from app.api.notifications import router as notifications_router
+from app.api.trust import router as trust_router
 
 # ---------------------------------------------------------------------------
 # App initialisation
@@ -163,6 +164,24 @@ def create_tables() -> None:
 
             # --- land_images (source_id nullable already handled above) ---
             "ALTER TABLE land_images ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()",
+
+            # --- land_climate (min/mean temperature columns) ---
+            "ALTER TABLE land_climate ADD COLUMN IF NOT EXISTS temperature_min_c NUMERIC(10,4)",
+            "ALTER TABLE land_climate ADD COLUMN IF NOT EXISTS temperature_mean_c NUMERIC(10,4)",
+
+            # --- data trust layer ---
+            "ALTER TABLE crop_zones ADD COLUMN IF NOT EXISTS detection_method VARCHAR(64)",
+            "ALTER TABLE crop_zones ADD COLUMN IF NOT EXISTS trust_tier VARCHAR(16)",
+            "ALTER TABLE crop_zones ADD COLUMN IF NOT EXISTS separation_score NUMERIC(6,4)",
+            "ALTER TABLE crop_zones ADD COLUMN IF NOT EXISTS ambiguous BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE crop_zones ADD COLUMN IF NOT EXISTS suppressed BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE crop_zones ADD COLUMN IF NOT EXISTS zone_metadata JSONB",
+            "ALTER TABLE land_crops ADD COLUMN IF NOT EXISTS trust_tier VARCHAR(16)",
+            "ALTER TABLE land_crops ADD COLUMN IF NOT EXISTS is_synthetic BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE land_soil_profiles ADD COLUMN IF NOT EXISTS fetch_status VARCHAR(16)",
+            "ALTER TABLE land_soil_profiles ADD COLUMN IF NOT EXISTS fetch_attempts INT DEFAULT 0",
+            "ALTER TABLE land_soil_profiles ADD COLUMN IF NOT EXISTS last_fetch_error VARCHAR(512)",
+            "ALTER TABLE land_soil_profiles ADD COLUMN IF NOT EXISTS trust_tier VARCHAR(16)",
         ]
 
         with engine.begin() as conn:
@@ -234,6 +253,7 @@ app.include_router(soil_router, prefix="/api/v1")
 app.include_router(ai_router, prefix="/api/v1")
 app.include_router(activity_logs_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
+app.include_router(trust_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # Serve React Frontend (Single Page Application)

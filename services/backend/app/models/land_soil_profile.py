@@ -57,3 +57,7 @@ class LandSoilProfile(Base):
 
     fetched_at = Column(DateTime, default=_utcnow, nullable=False)
     source_id  = Column(Integer, ForeignKey("data_sources.source_id"), nullable=True)
+    fetch_status = Column(String(16), nullable=True)
+    fetch_attempts = Column(Integer, nullable=True, default=0)
+    last_fetch_error = Column(String(512), nullable=True)
+    trust_tier = Column(String(16), nullable=True)

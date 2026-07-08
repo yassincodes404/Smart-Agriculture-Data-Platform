@@ -9,6 +9,7 @@ from app.core.dependencies import get_db
 from app.soil import service as soil_service
 from app.soil.schemas import SoilProfileResponse, SoilStatusResponse, SoilSuitabilityResponse
 from app.security import require_land_access
+from app.tasks.soil_task import run_soil_profile_task
 
 router = APIRouter(tags=["soil"])
 
@@ -25,6 +26,23 @@ def soil_profile(public_id: str, land = Depends(require_land_access), db: Sessio
 
     Profile is fetched once at land registration and cached in the DB.
     """
+    result = soil_service.get_soil_profile(db, land.land_id)
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")
+    return result
+
+
+@router.post(
+    "/lands/{public_id}/soil-profile/retry",
+    response_model=SoilProfileResponse,
+    summary="Retry ISRIC SoilGrids profile fetch",
+)
+def retry_soil_profile(public_id: str, land=Depends(require_land_access), db: Session = Depends(get_db)):
+    """
+    Manually retry SoilGrids fetch when the initial registration fetch failed
+    (timeout, network error, or empty response).
+    """
+    run_soil_profile_task(land.land_id, db)
     result = soil_service.get_soil_profile(db, land.land_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Land not found")

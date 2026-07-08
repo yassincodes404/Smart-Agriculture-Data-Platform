@@ -24,6 +24,11 @@ class SoilProfileResponse(BaseModel):
     texture_class: Optional[str]
     properties: list[SoilProperty]
     source: str
+    fetch_status: Optional[str] = None
+    fetch_attempts: Optional[int] = None
+    last_fetch_error: Optional[str] = None
+    trust_tier: Optional[str] = None
+    retry_available: bool = False
 
 
 class CropSuitabilityEntry(BaseModel):

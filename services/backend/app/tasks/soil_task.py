@@ -17,6 +17,7 @@ from app.connectors import soilgrids
 from app.lands import repository as land_repo
 from app.soil import intelligence as soil_intel
 from app.soil import repository as soil_repo
+from app.trust.tier_resolver import TrustTierResolver
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,30 @@ def run_soil_profile_task(land_id: int, db: Session) -> bool:
     lat = float(land.latitude)
     lon = float(land.longitude)
 
-    profile = soilgrids.fetch_soil_profile(lat, lon)
-    if profile is None:
-        logger.warning("soil_task: SoilGrids returned no data for land_id=%s", land_id)
+    result = soilgrids.fetch_soil_profile(lat, lon)
+    if result.profile is None:
+        logger.warning(
+            "soil_task: SoilGrids fetch failed land_id=%s status=%s attempts=%s",
+            land_id,
+            result.status,
+            result.attempts,
+        )
+        tier = TrustTierResolver.for_soil_profile(
+            fetch_status=result.status,
+            has_data=False,
+        )
+        soil_repo.upsert_soil_fetch_status(
+            db,
+            land_id,
+            fetch_status=result.status,
+            fetch_attempts=result.attempts,
+            last_fetch_error=result.last_error,
+            trust_tier=tier.value,
+        )
+        db.commit()
         return False
 
+    profile = result.profile
     props = profile.get("properties", {})
 
     def _top(name: str):
@@ -55,11 +75,11 @@ def run_soil_profile_task(land_id: int, db: Session) -> bool:
     nitrogen = _top("nitrogen")
     cec      = _top("cec")
 
-    # Score suitability for all crops, pick overall best score
     all_scores = soil_intel.score_all_crops(ph, clay, soc, nitrogen)
     best_score = max(all_scores.values()) if all_scores else None
 
     ds = land_repo.get_or_create_data_source(db, "ISRIC-SoilGrids-v2")
+    tier = TrustTierResolver.for_soil_profile(fetch_status="success", has_data=True)
 
     soil_repo.upsert_soil_profile(
         db, land_id,
@@ -75,6 +95,10 @@ def run_soil_profile_task(land_id: int, db: Session) -> bool:
         depth_profile=props,
         suitability_score=best_score,
         source_id=int(ds.source_id),
+        fetch_status="success",
+        fetch_attempts=result.attempts,
+        last_fetch_error=None,
+        trust_tier=tier.value,
     )
 
     db.commit()

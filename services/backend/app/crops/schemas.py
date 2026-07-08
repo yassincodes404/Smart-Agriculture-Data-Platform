@@ -11,6 +11,15 @@ class NDVIPoint(BaseModel):
     growth_stage: str
 
 
+class SpectralSignals(BaseModel):
+    profile_fit: float
+    season_match: float
+    spatial_coherence: float
+    field_agreement: float
+    separation: Optional[float] = None
+    profile_margin: Optional[float] = None
+
+
 class DetectedCropItem(BaseModel):
     """A single detected crop with its confidence and metadata."""
     crop_type: str
@@ -18,17 +27,34 @@ class DetectedCropItem(BaseModel):
     ndvi_mean: float
     growth_stage: Optional[str] = None
     is_primary: bool = False
+    trust_tier: str = "estimated"
+    detection_method: Optional[str] = None
+    ambiguous: bool = False
+    show_confidence_bar: bool = False
 
 
 class CropDetectionResponse(BaseModel):
     land_id: int
     detected_crop_type: Optional[str]  # Primary crop (backward-compat)
     detected_crops: list[DetectedCropItem] = []  # All detected crops
-    detection_method: str              # "spectral_signature" | "user_defined" | "unknown"
+    detection_method: str              # ndvi_profile_match | user_confirmed | unknown
+    trust_tier: str = "estimated"
+    declared_crop: Optional[str] = None
+    spectral_estimate: Optional[str] = None
     confidence: float                  # Primary crop confidence
+    confidence_band: str = "low"       # high | medium | low
+    requires_confirmation: bool = True
+    display_label: str = "Suggested"
+    spectral_signals: Optional[SpectralSignals] = None
+    is_synthetic_data: bool = False
     ndvi_current: float
     health: str
     note: str
+
+
+class DeclaredCropRequest(BaseModel):
+    crop_type: str
+    notes: Optional[str] = None
 
 
 class ZoneHealthItem(BaseModel):

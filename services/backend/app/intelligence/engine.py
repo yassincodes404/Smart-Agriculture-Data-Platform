@@ -102,10 +102,19 @@ class CropIntelligenceEngine:
     # Main entry point
     # ------------------------------------------------------------------
 
-    def analyze_land(self, land_id: int, db: Session, run_pipeline: bool = False) -> LandIntelligenceReport:
+    def analyze_land(
+        self,
+        land_id: int,
+        db: Session,
+        run_pipeline: bool = False,
+        *,
+        persist: bool = True,
+    ) -> LandIntelligenceReport:
         """
         Run the complete intelligence pipeline for a land.
         Returns a fully validated, consistent LandIntelligenceReport.
+
+        When ``persist=False``, zone records are not updated (read-only analysis).
         """
         from app.models.land import Land
         from app.models.land_crop import LandCrop
@@ -190,11 +199,10 @@ class CropIntelligenceEngine:
         # --- Step 7: Compute data quality ---
         report.data_quality_score = self._compute_data_quality(crop_rows)
 
-        # --- Step 8: Store the report ---
-        self._store_report(report, db)
-
-        # --- Step 9: Update CropZone records with validated intelligence ---
-        self._update_crop_zones(report, db)
+        # --- Step 8–9: Persist report + update crop zones (optional) ---
+        if persist:
+            self._store_report(report, db)
+            self._update_crop_zones(report, db)
 
         logger.info(
             "Intelligence report for land %s: %d zones, overall_health=%d, confidence=%.2f, warnings=%d",
@@ -223,9 +231,11 @@ class CropIntelligenceEngine:
         ndvi_series = [float(r.ndvi_value) for r in zone_rows if r.ndvi_value is not None]
         dates = [r.timestamp.strftime("%Y-%m-%d") for r in zone_rows if r.ndvi_value is not None]
 
-        # Current NDVI
-        ndvi_current = float(cz.latest_ndvi) if cz.latest_ndvi else (
-            ndvi_series[-1] if ndvi_series else 0.0
+        # Current NDVI — prefer latest observation over stale zone snapshot
+        ndvi_current = (
+            ndvi_series[-1] if ndvi_series else (
+                float(cz.latest_ndvi) if cz.latest_ndvi else 0.0
+            )
         )
 
         # NDVI trend
@@ -350,6 +360,26 @@ class CropIntelligenceEngine:
             ndvi_series, dates, crop_type
         )
 
+        next_harvest_est = None
+        next_harvest_days = None
+        harvest_status = "completed" if harvest_events else "not_harvested"
+        if harvest_events:
+            latest_event = harvest_events[-1]
+            days_since = (date.today() - latest_event.date).days if latest_event.date else 999
+            if days_since >= 30:
+                harvest_status = "not_harvested"
+
+        prediction = self.harvest_detector.predict_next_harvest(
+            last_harvest=harvest_events[-1] if harvest_events else None,
+            crop_type=crop_type,
+            ndvi_current=ndvi_current,
+            ndvi_trend=ndvi_trend,
+            current_growth_stage=growth_stage,
+        )
+        if prediction:
+            next_harvest_est = prediction.estimated_date
+            next_harvest_days = prediction.days_remaining
+
         return ZoneIntelligence(
             zone_id=0,
             crop_type=crop_type,
@@ -358,9 +388,11 @@ class CropIntelligenceEngine:
             area_hectares=float(land.area_hectares) if land.area_hectares else None,
             growth_stage=growth_stage,
             growth_stage_confidence=round(growth_conf, 2),
-            harvest_status="completed" if harvest_events else "not_harvested",
+            harvest_status=harvest_status,
             harvest_count=len(harvest_events),
             last_harvest_date=harvest_events[-1].date if harvest_events else None,
+            next_harvest_est=next_harvest_est,
+            next_harvest_days=next_harvest_days,
             health_score=self._compute_health_score(ndvi_current, growth_stage, {}),
             stress=self._assess_stress(ndvi_current, ndvi_trend, ndvi_peak, {}),
             ndvi_current=round(ndvi_current, 4),

@@ -87,8 +87,10 @@ class TestSentinelConnector:
 @pytest.fixture
 def test_land_for_sentinel(client, db_session):
     """Register a basic land to attach images to."""
-    with patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_current_land_climate"), \
-         patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_soil_and_et0"), \
+    with patch(
+        "app.pipeline.land_discovery_pipeline.open_meteo_polygon.fetch_polygon_historical_climate",
+        return_value=([], None),
+    ), \
          patch("app.tasks.satellite_task.modis_ndvi.fetch_ndvi_history"), \
          patch("app.tasks.soil_task.soilgrids.fetch_soil_profile"), \
          patch("app.tasks.sentinel_task.sentinel.fetch_sentinel_visual_urls"):

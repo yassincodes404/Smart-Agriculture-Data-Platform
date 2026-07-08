@@ -73,7 +73,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window = window_seconds
         self.requests: Dict[str, List[float]] = defaultdict(list)
 
+    @staticmethod
+    def _is_exempt(request: Request) -> bool:
+        """Binary asset and health endpoints are auth-gated; skip IP throttle."""
+        path = request.url.path
+        if request.method == "GET" and path.endswith("/health"):
+            return True
+        if request.method == "GET" and "/images/" in path and path.endswith("/content"):
+            return True
+        return False
+
     async def dispatch(self, request: Request, call_next):
+        if self._is_exempt(request):
+            return await call_next(request)
+
         client_ip = request.client.host if request.client else "unknown"
         now = time.time()
 

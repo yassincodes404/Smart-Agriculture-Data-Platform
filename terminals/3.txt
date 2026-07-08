@@ -1,0 +1,234 @@
+---
+pid: 20640
+cwd: "D:\Projects\Smart-Agriculture-Data-Platform"
+command: "Set-Location D:\\Projects\\Smart-Agriculture-Data-Platform\\services\\backend; python -m pytest app/tests/connectors/test_open_meteo_polygon.py app/tests/soil/test_soil_retry.py app/tests/trust/ app/tests/api/test_soil_endpoints.py app/tests/api/test_lands.py -q --tb=short 2>&1"
+started_at: 2026-07-08T12:30:18.995Z
+running_for_ms: 3145002  
+---
+.................EEEEFEEEEEFEEEFEEFFFF                                   [100%]
+=================================== ERRORS ====================================
+_______ ERROR at setup of TestSoilProfile.test_returns_200_with_profile _______
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+_______ ERROR at setup of TestSoilProfile.test_all_depth_layers_present _______
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+____ ERROR at setup of TestSoilProfile.test_ph_classification_in_response _____
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+_ ERROR at setup of TestSoilProfile.test_returns_unavailable_when_no_profile __
+app\tests\api\test_soil_endpoints.py:87: in land_without_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+________ ERROR at setup of TestSoilSuitability.test_returns_top_crops _________
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+_____ ERROR at setup of TestSoilSuitability.test_suitability_labels_valid _____
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+______ ERROR at setup of TestSoilSuitability.test_advice_list_not_empty _______
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+____ ERROR at setup of TestSoilSuitability.test_overall_best_score_present ____
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+_ ERROR at setup of TestSoilSuitability.test_returns_unavailable_when_no_profile _
+app\tests\api\test_soil_endpoints.py:87: in land_without_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+_________ ERROR at setup of TestSoilStatus.test_returns_combined_data _________
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+_ ERROR at setup of TestSoilStatus.test_moisture_populated_from_soil_snapshot _
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+_________ ERROR at setup of TestSoilStatus.test_advice_always_present _________
+app\tests\api\test_soil_endpoints.py:47: in land_with_soil_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+_____ ERROR at setup of TestSoilProfileTask.test_task_inserts_profile_row _____
+app\tests\api\test_soil_endpoints.py:87: in land_without_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+_ ERROR at setup of TestSoilProfileTask.test_task_returns_false_when_api_fails _
+app\tests\api\test_soil_endpoints.py:87: in land_without_profile
+    with patch(
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\unittest\mock.py:1430: in __enter__
+    self.target = self.getter()
+                  ^^^^^^^^^^^^^
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\pkgutil.py:715: in resolve_name
+    result = getattr(result, p)
+             ^^^^^^^^^^^^^^^^^^
+E   AttributeError: module 'app.tasks.satellite_task' has no attribute 'modis_ndvi'
+================================== FAILURES ===================================
+__________________ TestSoilProfile.test_404_for_unknown_land __________________
+app\tests\api\test_soil_endpoints.py:145: in test_404_for_unknown_land
+    assert resp.status_code == 404
+E   assert 401 == 404
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+________________ TestSoilSuitability.test_404_for_unknown_land ________________
+app\tests\api\test_soil_endpoints.py:191: in test_404_for_unknown_land
+    assert resp.status_code == 404
+E   assert 401 == 404
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+__________________ TestSoilStatus.test_404_for_unknown_land ___________________
+app\tests\api\test_soil_endpoints.py:223: in test_404_for_unknown_land
+    assert resp.status_code == 404
+E   assert 401 == 404
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+_______________________ test_discover_land_returns_202 ________________________
+app\tests\api\test_lands.py:37: in test_discover_land_returns_202
+    assert resp.status_code == 202
+E   assert 400 == 202
+E    +  where 400 = <Response [400 Bad Request]>.status_code
+------------------------------ Captured log call ------------------------------
+WARNING  app.lands.validator:validator.py:76 Validation failed: Insufficient vegetation (max_ndvi=0.115).
+________________________ test_timeseries_unknown_land _________________________
+app\tests\api\test_lands.py:48: in test_timeseries_unknown_land
+    assert resp.status_code == 404
+E   assert 401 == 404
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+___________ test_timeseries_climate_returns_points_after_discovery ____________
+app\tests\api\test_lands.py:56: in test_timeseries_climate_returns_points_after_discovery
+    land_id = discover.json()["land_id"]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'land_id'
+------------------------------ Captured log call ------------------------------
+WARNING  app.lands.validator:validator.py:76 Validation failed: Insufficient vegetation (max_ndvi=0.115).
+__________ test_timeseries_climate_empty_when_connector_returns_none __________
+app\tests\api\test_lands.py:78: in test_timeseries_climate_empty_when_connector_returns_none
+    land_id = discover.json()["land_id"]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'land_id'
+------------------------------ Captured log call ------------------------------
+WARNING  app.lands.validator:validator.py:76 Validation failed: Insufficient vegetation (max_ndvi=0.115).
+============================== warnings summary ===============================
+app\main.py:114
+  D:\Projects\Smart-Agriculture-Data-Platform\services\backend\app\main.py:114: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastapi\applications.py:4656
+  C:\Users\yasee\AppData\Local\Programs\Python\Python311\Lib\site-packages\fastapi\applications.py:4656: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_404_for_unknown_land
+FAILED app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_404_for_unknown_land
+FAILED app/tests/api/test_soil_endpoints.py::TestSoilStatus::test_404_for_unknown_land
+FAILED app/tests/api/test_lands.py::test_discover_land_returns_202 - assert 4...
+FAILED app/tests/api/test_lands.py::test_timeseries_unknown_land - assert 401...
+FAILED app/tests/api/test_lands.py::test_timeseries_climate_returns_points_after_discovery
+FAILED app/tests/api/test_lands.py::test_timeseries_climate_empty_when_connector_returns_none
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_returns_200_with_profile
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_all_depth_layers_present
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_ph_classification_in_response
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfile::test_returns_unavailable_when_no_profile
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_returns_top_crops
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_suitability_labels_valid
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_advice_list_not_empty
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_overall_best_score_present
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilSuitability::test_returns_unavailable_when_no_profile
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilStatus::test_returns_combined_data
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilStatus::test_moisture_populated_from_soil_snapshot
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilStatus::test_advice_always_present
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfileTask::test_task_inserts_profile_row
+ERROR app/tests/api/test_soil_endpoints.py::TestSoilProfileTask::test_task_returns_false_when_api_fails
+7 failed, 17 passed, 2 warnings, 14 errors in 26.79s

@@ -62,6 +62,21 @@ def get_land_by_public_id(db: Session, public_id: str) -> Optional[Land]:
     return db.query(Land).filter(Land.public_id == uuid_val, Land.is_deleted == False).first()  # noqa: E712
 
 
+def update_land_climate_sampling_metadata(
+    db: Session,
+    land_id: int,
+    climate_sampling: dict,
+) -> None:
+    """Persist polygon weather sampling metadata on land.metadata_."""
+    land = get_land(db, land_id)
+    if land is None:
+        return
+    meta = dict(land.metadata_ or {})
+    meta["climate_sampling"] = climate_sampling
+    land.metadata_ = meta
+    db.flush()
+
+
 def list_all_lands(
     db: Session,
     *,
@@ -85,6 +100,17 @@ def list_land_ids_for_monitoring(db: Session) -> Sequence[int]:
     """Lands that should receive periodic monitoring snapshots."""
     stmt = select(Land.land_id).where(Land.status.in_(("active", "processing")))
     return [row[0] for row in db.execute(stmt)]
+
+
+def get_latest_climate_timestamp(db: Session, land_id: int) -> Optional[datetime]:
+    """Most recent climate snapshot for a land (used by monitoring due checks)."""
+    stmt = (
+        select(LandClimate.timestamp)
+        .where(LandClimate.land_id == land_id)
+        .order_by(LandClimate.timestamp.desc())
+        .limit(1)
+    )
+    return db.execute(stmt).scalar_one_or_none()
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +137,8 @@ def insert_land_climate_snapshot(
     land_id: int,
     *,
     temperature_celsius: Optional[float] = None,
+    temperature_min_c: Optional[float] = None,
+    temperature_mean_c: Optional[float] = None,
     humidity_pct: Optional[float] = None,
     rainfall_mm: Optional[float] = None,
     source_id: Optional[int] = None,
@@ -118,6 +146,8 @@ def insert_land_climate_snapshot(
     row = LandClimate(
         land_id=land_id,
         temperature_celsius=Decimal(str(temperature_celsius)) if temperature_celsius is not None else None,
+        temperature_min_c=Decimal(str(temperature_min_c)) if temperature_min_c is not None else None,
+        temperature_mean_c=Decimal(str(temperature_mean_c)) if temperature_mean_c is not None else None,
         humidity_pct=Decimal(str(humidity_pct)) if humidity_pct is not None else None,
         rainfall_mm=Decimal(str(rainfall_mm)) if rainfall_mm is not None else None,
         source_id=source_id,
@@ -125,6 +155,25 @@ def insert_land_climate_snapshot(
     db.add(row)
     db.flush()
     return row
+
+
+def delete_environment_rows_since(db: Session, land_id: int, since) -> None:
+    """Remove climate/soil/water rows on or after `since` (for environment refresh)."""
+    from sqlalchemy import text
+
+    params = {"lid": land_id, "since": since}
+    db.execute(
+        text("DELETE FROM land_climate WHERE land_id=:lid AND timestamp >= :since"),
+        params,
+    )
+    db.execute(
+        text("DELETE FROM land_soil WHERE land_id=:lid AND timestamp >= :since"),
+        params,
+    )
+    db.execute(
+        text("DELETE FROM land_water WHERE land_id=:lid AND timestamp >= :since"),
+        params,
+    )
 
 
 def list_land_climate_rows(db: Session, land_id: int) -> Sequence[LandClimate]:
@@ -178,21 +227,85 @@ def insert_land_crop_snapshot(
     return row
 
 
-def list_land_crop_rows(db: Session, land_id: int, limit: Optional[int] = None) -> Sequence[LandCrop]:
-    stmt = select(LandCrop).where(LandCrop.land_id == land_id).order_by(LandCrop.timestamp.asc())
+def list_land_crop_rows(
+    db: Session,
+    land_id: int,
+    *,
+    zone_id: Optional[int] = None,
+    limit: Optional[int] = None,
+) -> Sequence[LandCrop]:
+    stmt = select(LandCrop).where(LandCrop.land_id == land_id)
+    if zone_id is not None:
+        stmt = stmt.where(LandCrop.zone_id == zone_id)
+    stmt = stmt.order_by(LandCrop.timestamp.asc())
     if limit is not None:
         stmt = stmt.limit(limit)
     return db.execute(stmt).scalars().all()
 
 
-def get_latest_crop_record(db: Session, land_id: int) -> Optional[LandCrop]:
+def get_primary_crop_zone(db: Session, land_id: int):
+    zones = list_crop_zones(db, land_id)
+    return zones[0] if zones else None
+
+
+def get_latest_crop_record(
+    db: Session,
+    land_id: int,
+    *,
+    zone_id: Optional[int] = None,
+) -> Optional[LandCrop]:
+    stmt = select(LandCrop).where(LandCrop.land_id == land_id)
+    if zone_id is not None:
+        stmt = stmt.where(LandCrop.zone_id == zone_id)
+    stmt = stmt.order_by(LandCrop.timestamp.desc()).limit(1)
+    return db.execute(stmt).scalar_one_or_none()
+
+
+def backfill_image_ndvi_means(db: Session, land_id: int) -> int:
+    """Join NDVI image rows to nearest land_crops NDVI (primary zone). Returns update count."""
+    primary = get_primary_crop_zone(db, land_id)
+    zone_id = int(primary.zone_id) if primary else None
+    imgs = list_land_images(db, land_id, image_type="ndvi")
+    updated = 0
+    for img in imgs:
+        if img.ndvi_mean is not None:
+            continue
+        val = find_crop_ndvi_near_date(db, land_id, img.timestamp, zone_id=zone_id)
+        if val is not None:
+            img.ndvi_mean = Decimal(str(round(val, 4)))
+            updated += 1
+    if updated:
+        db.flush()
+    return updated
+
+
+def find_crop_ndvi_near_date(
+    db: Session,
+    land_id: int,
+    target_ts,
+    *,
+    zone_id: Optional[int] = None,
+    day_tolerance: int = 1,
+) -> Optional[float]:
+    """Nearest land_crops NDVI for an image timestamp (±day_tolerance days)."""
+    from datetime import timedelta
+
+    start = target_ts - timedelta(days=day_tolerance)
+    end = target_ts + timedelta(days=day_tolerance)
     stmt = (
         select(LandCrop)
         .where(LandCrop.land_id == land_id)
-        .order_by(LandCrop.timestamp.desc())
-        .limit(1)
+        .where(LandCrop.timestamp >= start)
+        .where(LandCrop.timestamp <= end)
+        .where(LandCrop.ndvi_value.isnot(None))
     )
-    return db.execute(stmt).scalar_one_or_none()
+    if zone_id is not None:
+        stmt = stmt.where(LandCrop.zone_id == zone_id)
+    rows = db.execute(stmt.order_by(LandCrop.timestamp.asc())).scalars().all()
+    if not rows:
+        return None
+    best = min(rows, key=lambda r: abs((r.timestamp - target_ts).total_seconds()))
+    return float(best.ndvi_value) if best.ndvi_value is not None else None
 
 
 # ---------------------------------------------------------------------------

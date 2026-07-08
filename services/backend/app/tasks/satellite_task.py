@@ -4,15 +4,15 @@ tasks/satellite_task.py
 Per-land NDVI update orchestrator.
 
 Responsibilities:
-  1. Fetch MODIS NDVI data for a land's centroid coordinates
-  2. Compute NDVI from raw NIR/RED bands (cv.ndvi)
+  1. Fetch Sentinel-2 L2A STAC time-series for a land's bounding box
+  2. Compute vegetation indices from NIR/RED (and related) bands
   3. Classify health, growth stage, trend, confidence
-  4. Insert LandCrop snapshot with all fields
+  4. Insert LandCrop snapshots with source attribution
   5. Detect anomalies → insert LandAlert if needed
   6. Optionally backfill historical NDVI
 
 This task is called:
-  - At land registration (backfill 90 days)
+  - At land registration (multi-day backfill)
   - By the monitoring pipeline every land.monitoring_interval_days
 """
 from __future__ import annotations

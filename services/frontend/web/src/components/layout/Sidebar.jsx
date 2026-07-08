@@ -99,7 +99,7 @@ const baseNavItems = [
   { to: "/profile", icon: "profile", label: "Profile" },
 ];
 
-export default function Sidebar({ isOpen, onClose }) {
+export default function Sidebar({ isDrawer, onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -109,18 +109,13 @@ export default function Sidebar({ isOpen, onClose }) {
   ];
 
   const handleNavClick = () => {
-    // On mobile, close the drawer after navigation
-    if (typeof window !== 'undefined' && window.innerWidth <= 768 && onClose) {
-      onClose();
-    }
+    if (isDrawer && onClose) onClose();
   };
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
-    if (typeof window !== 'undefined' && window.innerWidth <= 768 && onClose) {
-      onClose();
-    }
+    if (isDrawer && onClose) onClose();
   };
 
   /** Get user's initials for avatar */
@@ -141,23 +136,11 @@ export default function Sidebar({ isOpen, onClose }) {
         </div>
         <span className="sidebar__logo-text">AgriData Egypt</span>
 
-        {/* Mobile close button (X) inside drawer for easy close - robust UX */}
-        {typeof window !== 'undefined' && window.innerWidth <= 768 && onClose && (
-          <button 
-            onClick={onClose} 
-            className="sidebar__close-btn"
+        {isDrawer && onClose && (
+          <button
+            onClick={onClose}
+            className="sidebar__close-btn touch-target"
             aria-label="Close sidebar"
-            style={{ 
-              marginLeft: 'auto', 
-              background: 'none', 
-              border: 'none', 
-              color: 'rgba(255,255,255,0.8)', 
-              fontSize: '28px',
-              lineHeight: 1,
-              cursor: 'pointer',
-              padding: '0 8px',
-              opacity: 0.9
-            }}
           >
             ×
           </button>

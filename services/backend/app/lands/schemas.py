@@ -159,6 +159,11 @@ class CropZoneItem(BaseModel):
     estimated_yield_tons: Optional[float] = None
     first_detected: Optional[str] = None
     last_updated: Optional[str] = None
+    detection_method: Optional[str] = None
+    trust_tier: Optional[str] = None
+    separation_score: Optional[float] = None
+    ambiguous: bool = False
+    show_confidence_bar: bool = False
 
 
 class CropZoneListResponse(BaseModel):

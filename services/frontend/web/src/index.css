@@ -103,6 +103,12 @@
   --sidebar-width: 260px;
   --topbar-height: 56px;
   --content-max-width: 1400px;
+
+  /* Breakpoints — keep in sync with hooks/useBreakpoint.js */
+  --bp-mobile: 640px;
+  --bp-tablet: 1024px;
+  --bp-drawer: 1024px;
+  --touch-target: 44px;
 }
 
 /* --- Reset & Base --- */

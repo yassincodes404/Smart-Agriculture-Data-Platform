@@ -6,39 +6,41 @@
  */
 
 import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import MobileBottomNav from "./MobileBottomNav";
+import { useBreakpoint } from "../../hooks/useBreakpoint";
+
+function isLandDetailRoute(pathname) {
+  return /^\/lands\/(?!new$|compare$)[^/]+$/.test(pathname);
+}
 
 export default function AppLayout({ children }) {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isMobile, setIsMobile] = useState(false);
+  const location = useLocation();
+  const { isDrawer, isDesktop } = useBreakpoint();
+  const isImmersiveDetail = isLandDetailRoute(location.pathname);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth > 1024 : true
+  );
 
-  // Robust mobile detection and initial state
   useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth <= 768;
-      setIsMobile(mobile);
-      // On mobile, start closed; on desktop start open
-      if (mobile) {
-        setIsSidebarOpen(false);
-      } else {
-        setIsSidebarOpen(true);
-      }
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+    if (isDrawer) {
+      setIsSidebarOpen(false);
+    } else {
+      setIsSidebarOpen(true);
+    }
+  }, [isDrawer]);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
   const closeSidebar = () => setIsSidebarOpen(false);
 
   return (
-    <div className={`app-shell ${!isSidebarOpen ? "app-shell--collapsed" : ""}`}>
-      <Sidebar isOpen={isSidebarOpen} onClose={closeSidebar} />
-      {/* Mobile drawer overlay - visible when drawer open. Positioned below topbar via CSS */}
-      {isSidebarOpen && isMobile && (
+    <div
+      className={`app-shell ${!isSidebarOpen ? "app-shell--collapsed" : ""}${isImmersiveDetail ? " app-shell--land-detail" : ""}`}
+    >
+      <Sidebar isDrawer={isDrawer} onClose={closeSidebar} />
+      {isSidebarOpen && isDrawer && (
         <div 
           className="mobile-sidebar-overlay"
           onClick={closeSidebar}
@@ -52,6 +54,7 @@ export default function AppLayout({ children }) {
             {children}
           </div>
         </main>
+        {!isDesktop && <MobileBottomNav />}
       </div>
     </div>
   );
