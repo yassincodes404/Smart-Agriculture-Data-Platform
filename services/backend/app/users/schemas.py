@@ -48,8 +48,25 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     """Body for POST /auth/login"""
 
-    email: EmailStr
+    email: str
     password: str
+
+    @field_validator("email")
+    @classmethod
+    def email_login_format(cls, v: str) -> str:
+        email = v.strip().lower()
+        if (
+            not email
+            or "@" not in email
+            or email.count("@") != 1
+            or any(ch.isspace() for ch in email)
+        ):
+            raise ValueError("Enter a valid email address.")
+
+        local_part, domain = email.split("@", 1)
+        if not local_part or not domain or "." not in domain:
+            raise ValueError("Enter a valid email address.")
+        return email
 
     model_config = {"extra": "forbid"}
 

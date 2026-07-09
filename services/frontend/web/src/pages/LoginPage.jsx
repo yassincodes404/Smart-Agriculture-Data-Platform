@@ -69,9 +69,11 @@ export default function LoginPage() {
       }
     } catch (err) {
       // Provide clearer error messages for mobile users
-      const msg = err.message || "";
+      const msg = typeof err?.message === "string" ? err.message : "";
       if (msg.includes("fetch") || msg.includes("network") || msg.includes("Failed")) {
         setError("Cannot connect to server. Please check your internet connection.");
+      } else if (!msg || msg === "[object Object]") {
+        setError("Invalid email or password.");
       } else {
         setError(msg || "Invalid email or password.");
       }

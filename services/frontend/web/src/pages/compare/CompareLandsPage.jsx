@@ -110,11 +110,11 @@ export default function CompareLandsPage() {
           });
           setLands(validLands);
           if (validLands.length > 0) {
-            setLandAId(validLands[0].land_id.toString());
+            setLandAId(validLands[0].public_id);
             setLandBId(
               validLands.length > 1
-                ? validLands[1].land_id.toString()
-                : validLands[0].land_id.toString()
+                ? validLands[1].public_id
+                : validLands[0].public_id
             );
           }
         }
@@ -235,7 +235,7 @@ export default function CompareLandsPage() {
               onChange={(e) => setLandAId(e.target.value)}
             >
               {lands.map((l) => (
-                <option key={l.land_id} value={l.land_id}>{l.name}</option>
+                <option key={l.public_id || l.land_id} value={l.public_id}>{l.name}</option>
               ))}
             </select>
           </div>
@@ -267,7 +267,7 @@ export default function CompareLandsPage() {
               onChange={(e) => setLandBId(e.target.value)}
             >
               {lands.map((l) => (
-                <option key={l.land_id} value={l.land_id}>{l.name}</option>
+                <option key={l.public_id || l.land_id} value={l.public_id}>{l.name}</option>
               ))}
             </select>
           </div>
