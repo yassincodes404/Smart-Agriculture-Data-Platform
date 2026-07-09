@@ -114,45 +114,61 @@ def _fetch_once(
     lon: float,
     timeout: float,
 ) -> Optional[dict[str, Any]]:
-    params: list[tuple[str, str]] = []
-    params.append(("lon", str(lon)))
-    params.append(("lat", str(lat)))
-    for prop in PROPERTIES:
-        params.append(("property", prop))
-    for depth in DEPTHS:
-        params.append(("depth", depth))
-    params.append(("value", "mean"))
-
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.get(ISRIC_BASE, params=params, follow_redirects=True)
-        resp.raise_for_status()
-        data = resp.json()
-
-    layers = data.get("properties", {}).get("layers", [])
-    if not layers:
-        logger.warning("SoilGrids returned no layers for lat=%s lon=%s", lat, lon)
-        return None
-
     result: dict[str, dict[str, Optional[float]]] = {}
     any_value = False
 
-    for layer in layers:
-        name = layer.get("name")
-        d_factor = layer.get("unit_measure", {}).get("d_factor", 1) or 1
-        if not name:
-            continue
-        depth_vals: dict[str, Optional[float]] = {}
-        for depth_entry in layer.get("depths", []):
-            label = depth_entry.get("label")
-            raw = depth_entry.get("values", {}).get("mean")
-            if label is None:
-                continue
-            if raw is not None:
-                depth_vals[label] = round(raw / d_factor, 4)
-                any_value = True
-            else:
-                depth_vals[label] = None
-        result[name] = depth_vals
+    # Chunk properties to avoid SoilGrids API timeouts (chunk by 1 for maximum safety)
+    chunk_size = 1
+    with httpx.Client(timeout=timeout) as client:
+        for i in range(0, len(PROPERTIES), chunk_size):
+            chunk_props = PROPERTIES[i:i + chunk_size]
+            params: list[tuple[str, str]] = []
+            params.append(("lon", str(lon)))
+            params.append(("lat", str(lat)))
+            for prop in chunk_props:
+                params.append(("property", prop))
+            for depth in DEPTHS:
+                params.append(("depth", depth))
+            params.append(("value", "mean"))
+
+            # Retry per chunk to avoid restarting the whole process
+            chunk_success = False
+            for attempt in range(3):
+                try:
+                    resp = client.get(ISRIC_BASE, params=params, follow_redirects=True)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    
+                    layers = data.get("properties", {}).get("layers", [])
+                    if layers:
+                        for layer in layers:
+                            name = layer.get("name")
+                            d_factor = layer.get("unit_measure", {}).get("d_factor", 1) or 1
+                            if not name:
+                                continue
+                            depth_vals: dict[str, Optional[float]] = {}
+                            for depth_entry in layer.get("depths", []):
+                                label = depth_entry.get("label")
+                                raw = depth_entry.get("values", {}).get("mean")
+                                if label is None:
+                                    continue
+                                if raw is not None:
+                                    depth_vals[label] = round(raw / d_factor, 4)
+                                    any_value = True
+                                else:
+                                    depth_vals[label] = None
+                            result[name] = depth_vals
+                    chunk_success = True
+                    break
+                except httpx.TimeoutException:
+                    if attempt == 2:
+                        logger.warning("SoilGrids chunk timeout after 3 attempts for lat=%s lon=%s chunk=%s", lat, lon, chunk_props)
+                        raise
+                    time.sleep(2)
+                except httpx.HTTPError:
+                    if attempt == 2:
+                        raise
+                    time.sleep(2)
 
     if not any_value:
         logger.warning("SoilGrids all-null response for lat=%s lon=%s", lat, lon)

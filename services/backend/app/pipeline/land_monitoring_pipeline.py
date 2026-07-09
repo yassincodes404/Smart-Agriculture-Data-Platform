@@ -20,8 +20,8 @@ from app.lands import repository
 logger = logging.getLogger(__name__)
 
 ENVIRONMENT_REFRESH_DAYS = 7
-SATELLITE_LOOKBACK_DAYS = 30
-NDVI_LOOKBACK_DAYS = 30
+SATELLITE_LOOKBACK_DAYS = 180
+NDVI_LOOKBACK_DAYS = 90
 
 
 def _is_due_for_monitoring(db: Session, land_id: int, interval_days: int) -> bool:

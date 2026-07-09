@@ -435,7 +435,7 @@ export default function LandCropsSection({
                       </div>
                       <p className="insight-card__body">{zh.advice}</p>
                     </div>
-                    {zhv && zhv.prediction_available && (
+                    {zhv && (
                       <div className="insight-card">
                         <div className="insight-card__header">
                           <div className="insight-card__icon" style={{ background: "var(--warning-light)", color: "var(--amber-500)" }}>
@@ -446,34 +446,45 @@ export default function LandCropsSection({
                           </div>
                           <span className="insight-card__title">Harvest Prediction</span>
                         </div>
-                        <div style={{ marginBottom: "var(--space-sm)" }}>
-                          <div style={{ fontSize: 18, fontWeight: 700 }}>
-                            {formatHarvestDate(zhv.estimated_harvest_start)} → {formatHarvestDate(zhv.estimated_harvest_end)}
+                        {zhv.prediction_available ? (
+                          <>
+                            <div style={{ marginBottom: "var(--space-sm)" }}>
+                              <div style={{ fontSize: 18, fontWeight: 700 }}>
+                                {formatHarvestDate(zhv.estimated_harvest_start)} → {formatHarvestDate(zhv.estimated_harvest_end)}
+                              </div>
+                              {(() => {
+                                const days = computeDaysToHarvest(zhv.estimated_harvest_start) ?? zhv.days_to_harvest;
+                                const badge =
+                                  days < -14 ? "healthy" : days != null && days <= 14 ? "warning" : "info";
+                                const label =
+                                  days == null
+                                    ? "Estimate unavailable"
+                                    : days < -14
+                                      ? "Harvested"
+                                      : days < 0
+                                        ? `${Math.abs(days)}d overdue`
+                                        : days === 0
+                                          ? "Harvest today"
+                                          : `${days} days remaining`;
+                                return (
+                                  <span className={`badge badge--${badge}`} style={{ marginTop: 4 }}>
+                                    {label}
+                                  </span>
+                                );
+                              })()}
+                            </div>
+                            <p className="insight-card__body">
+                              Peak NDVI {zhv.peak_ndvi} on {zhv.peak_date}. Confidence: {zhv.confidence_level}.
+                            </p>
+                          </>
+                        ) : (
+                          <div style={{ paddingTop: "8px" }}>
+                            <span className="badge badge--neutral">Need more NDVI observations</span>
+                            <p className="insight-card__body" style={{ marginTop: "8px" }}>
+                              {zhv.note || "Not enough data for prediction."}
+                            </p>
                           </div>
-                          {(() => {
-                            const days = computeDaysToHarvest(zhv.estimated_harvest_start) ?? zhv.days_to_harvest;
-                            const badge =
-                              days < -14 ? "healthy" : days != null && days <= 14 ? "warning" : "info";
-                            const label =
-                              days == null
-                                ? "Estimate unavailable"
-                                : days < -14
-                                  ? "Harvested"
-                                  : days < 0
-                                    ? `${Math.abs(days)}d overdue`
-                                    : days === 0
-                                      ? "Harvest today"
-                                      : `${days} days remaining`;
-                            return (
-                              <span className={`badge badge--${badge}`} style={{ marginTop: 4 }}>
-                                {label}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                        <p className="insight-card__body">
-                          Peak NDVI {zhv.peak_ndvi} on {zhv.peak_date}. Confidence: {zhv.confidence_level}.
-                        </p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -506,7 +517,7 @@ export default function LandCropsSection({
                   <p className="insight-card__body">{cropHealth.advice}</p>
                 </div>
               )}
-              {harvest && harvest.prediction_available && (
+              {harvest && (
                 <div className="insight-card">
                   <div className="insight-card__header">
                     <div className="insight-card__icon" style={{ background: "var(--warning-light)", color: "var(--amber-500)" }}>
@@ -517,34 +528,45 @@ export default function LandCropsSection({
                     </div>
                     <span className="insight-card__title">Harvest Prediction</span>
                   </div>
-                  <div style={{ marginBottom: "var(--space-sm)" }}>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>
-                      {formatHarvestDate(harvest.estimated_harvest_start)} → {formatHarvestDate(harvest.estimated_harvest_end)}
+                  {harvest.prediction_available ? (
+                    <>
+                      <div style={{ marginBottom: "var(--space-sm)" }}>
+                        <div style={{ fontSize: 18, fontWeight: 700 }}>
+                          {formatHarvestDate(harvest.estimated_harvest_start)} → {formatHarvestDate(harvest.estimated_harvest_end)}
+                        </div>
+                        {(() => {
+                          const days = computeDaysToHarvest(harvest.estimated_harvest_start) ?? harvest.days_to_harvest;
+                          const badge =
+                            days < -14 ? "healthy" : days != null && days <= 14 ? "warning" : "info";
+                          const label =
+                            days == null
+                              ? "Estimate unavailable"
+                              : days < -14
+                                ? "Harvested"
+                                : days < 0
+                                  ? `${Math.abs(days)}d overdue`
+                                  : days === 0
+                                    ? "Harvest today"
+                                    : `${days} days remaining`;
+                          return (
+                            <span className={`badge badge--${badge}`} style={{ marginTop: 4 }}>
+                              {label}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                      <p className="insight-card__body">
+                        Peak NDVI {harvest.peak_ndvi} on {harvest.peak_date}. {harvest.note}
+                      </p>
+                    </>
+                  ) : (
+                    <div style={{ paddingTop: "8px" }}>
+                      <span className="badge badge--neutral">Need more NDVI observations</span>
+                      <p className="insight-card__body" style={{ marginTop: "8px" }}>
+                        {harvest.note || "Not enough data for prediction."}
+                      </p>
                     </div>
-                    {(() => {
-                      const days = computeDaysToHarvest(harvest.estimated_harvest_start) ?? harvest.days_to_harvest;
-                      const badge =
-                        days < -14 ? "healthy" : days != null && days <= 14 ? "warning" : "info";
-                      const label =
-                        days == null
-                          ? "Estimate unavailable"
-                          : days < -14
-                            ? "Harvested"
-                            : days < 0
-                              ? `${Math.abs(days)}d overdue`
-                              : days === 0
-                                ? "Harvest today"
-                                : `${days} days remaining`;
-                      return (
-                        <span className={`badge badge--${badge}`} style={{ marginTop: 4 }}>
-                          {label}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                  <p className="insight-card__body">
-                    Peak NDVI {harvest.peak_ndvi} on {harvest.peak_date}. {harvest.note}
-                  </p>
+                  )}
                 </div>
               )}
             </div>

@@ -35,7 +35,7 @@ def run_ndvi_task(land_id: int, db: Session) -> bool:
     """
     Fetch and store the latest Sentinel-2 snapshot for a land.
     """
-    return run_ndvi_history_backfill(land_id, db, days=8) > 0
+    return run_ndvi_history_backfill(land_id, db, days=90) > 0
 
 
 def run_ndvi_history_backfill(
