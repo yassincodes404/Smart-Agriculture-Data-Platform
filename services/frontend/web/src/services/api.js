@@ -124,7 +124,19 @@ async function request(endpoint, options = {}) {
     }
 
     if (!response.ok) {
-      const errorMessage = data.detail || data.message || `Request failed with status ${response.status}`;
+      let errorMessage = `Request failed with status ${response.status}`;
+      if (data) {
+        if (typeof data.detail === 'string') {
+          errorMessage = data.detail;
+        } else if (Array.isArray(data.detail)) {
+          // FastAPI validation error array
+          errorMessage = data.detail.map(e => e.msg).join(", ");
+        } else if (data.message && typeof data.message === 'string') {
+          errorMessage = data.message;
+        } else if (typeof data.detail === 'object' && data.detail !== null) {
+          errorMessage = JSON.stringify(data.detail);
+        }
+      }
       const err = new Error(errorMessage);
       err.status = response.status;
       throw err;
