@@ -42,14 +42,11 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     setError(null);
-    const res = await loginUser({ email, password });
-    // Fetch user profile in background (don't block login success)
-    getMe()
-      .then((meRes) => setUser(meRes.data))
-      .catch(() => {
-        // if fails, user can still be logged in with token
-      });
-    return res;
+    await loginUser({ email, password });
+    // Fetch user profile immediately to return it
+    const meRes = await getMe();
+    setUser(meRes.data);
+    return meRes.data;
   }, []);
 
   const register = useCallback(async (email, password, role = "viewer") => {
@@ -60,12 +57,10 @@ export function AuthProvider({ children }) {
 
   const googleSignIn = useCallback(async (credential) => {
     setError(null);
-    const res = await googleLogin(credential);
-    // Fetch user profile in background
-    getMe()
-      .then((meRes) => setUser(meRes.data))
-      .catch(() => {});
-    return res;
+    await googleLogin(credential);
+    const meRes = await getMe();
+    setUser(meRes.data);
+    return meRes.data;
   }, []);
 
   const logout = useCallback(async () => {

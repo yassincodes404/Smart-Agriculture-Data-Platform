@@ -61,8 +61,12 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      navigate("/dashboard");
+      const user = await login(email, password);
+      if (user?.role === "admin") {
+        navigate("/logs");
+      } else {
+        navigate("/dashboard");
+      }
     } catch (err) {
       // Provide clearer error messages for mobile users
       const msg = err.message || "";
@@ -80,8 +84,12 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await googleSignIn(credential);
-      navigate("/dashboard");
+      const user = await googleSignIn(credential);
+      if (user?.role === "admin") {
+        navigate("/logs");
+      } else {
+        navigate("/dashboard");
+      }
     } catch (err) {
       setError(err.message || "Google sign in failed.");
     } finally {
