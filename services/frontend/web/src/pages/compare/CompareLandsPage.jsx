@@ -322,7 +322,7 @@ export default function CompareLandsPage() {
                 </div>
               )}
             </div>
-            <div className="compare-chart-card__chart" style={{ height: chartHeight }}>
+            <div className="compare-chart-card__chart" style={{ height: chartHeight, overflow: "hidden" }}>
               {mergedChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
@@ -349,7 +349,7 @@ export default function CompareLandsPage() {
                       }}
                     />
                     <YAxis
-                      domain={[0, 1]}
+                      domain={[(dataMin) => Math.min(0, dataMin), 1]}
                       tick={{ fontSize: isMobile ? 10 : 12, fill: "var(--text-secondary)" }}
                       axisLine={false}
                       tickLine={false}

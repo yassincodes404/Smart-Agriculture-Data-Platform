@@ -70,7 +70,7 @@ export default function NDVIChart({ data, compact = false }) {
     : { top: 10, right: 10, left: -20, bottom: 0 };
 
   return (
-    <div className={compact ? "ndvi-chart ndvi-chart--compact" : "ndvi-chart"}>
+    <div className={compact ? "ndvi-chart ndvi-chart--compact" : "ndvi-chart"} style={{ overflow: "hidden" }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={chartData} margin={chartMargin}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
@@ -82,7 +82,7 @@ export default function NDVIChart({ data, compact = false }) {
             dy={10}
           />
           <YAxis
-            domain={[0, 1]}
+            domain={[(dataMin) => Math.min(0, dataMin), 1]}
             axisLine={false}
             tickLine={false}
             tick={{ fontSize: 12, fill: "var(--gray-500)" }}
