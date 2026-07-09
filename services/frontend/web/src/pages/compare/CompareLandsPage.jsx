@@ -106,7 +106,7 @@ export default function CompareLandsPage() {
         if (res.lands) {
           const validLands = res.lands.filter((l) => {
             const s = (l.status || "").toLowerCase();
-            return s === "ready" || s === "active" || s === "completed";
+            return s === "ready" || s === "active" || s === "active_partial" || s === "completed";
           });
           setLands(validLands);
           if (validLands.length > 0) {

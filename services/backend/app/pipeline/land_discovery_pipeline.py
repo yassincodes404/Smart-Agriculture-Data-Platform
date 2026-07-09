@@ -300,20 +300,23 @@ def execute(land_id: int, db: Session) -> None:
             from app.ai.land_analyst import run_ai_land_analysis
             run_ai_land_analysis(land_id, db, user_id=land.user_id)
         except Exception as e:
-            pipeline_errors.append("ai_analysis")
-            logger.exception("AI analysis failed land_id=%s (continuing)", land_id)
+            # AI is optional — do NOT mark this as a pipeline warning/error.
+            # The land should finish cleanly even without AI insights.
+            logger.info(
+                "AI analysis skipped for land_id=%s (non-fatal): %s", land_id, e
+            )
 
         # ------------------------------------------------------------------
         # Step 8: Finalize Status — keep land even when optional steps fail
         # ------------------------------------------------------------------
         land = repository.get_land(db, land_id)
         if land is not None:
+            from datetime import datetime, timezone
             meta = dict(land.metadata_ or {})
+            meta["pipeline_completed_at"] = datetime.now(timezone.utc).isoformat()
+            
             if pipeline_errors:
                 meta["pipeline_warnings"] = pipeline_errors
-                meta["pipeline_completed_at"] = None
-                land.metadata_ = meta
-                update_progress("active_partial")
                 logger.warning(
                     "land discovery completed with warnings land_id=%s warnings=%s",
                     land_id,
@@ -321,11 +324,10 @@ def execute(land_id: int, db: Session) -> None:
                 )
             else:
                 meta.pop("pipeline_warnings", None)
-                from datetime import datetime, timezone
-                meta["pipeline_completed_at"] = datetime.now(timezone.utc).isoformat()
-                land.metadata_ = meta
-                update_progress("active")
                 logger.info("land discovery completed land_id=%s", land_id)
+                
+            land.metadata_ = meta
+            update_progress("active")
             db.commit()
 
     except Exception as e:

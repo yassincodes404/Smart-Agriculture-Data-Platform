@@ -1,0 +1,32 @@
+{
+  "Wheat (Winter)": {
+    "lifecycle": "annual",
+    "ndvi_peak": 0.85,
+    "typical_season_months": [12, 1, 2, 3, 4]
+  },
+  "Alfalfa": {
+    "lifecycle": "perennial",
+    "ndvi_peak": 0.82,
+    "typical_season_months": []
+  },
+  "Corn (Maize)": {
+    "lifecycle": "annual",
+    "ndvi_peak": 0.88,
+    "typical_season_months": [6, 7, 8, 9]
+  },
+  "Cotton": {
+    "lifecycle": "annual",
+    "ndvi_peak": 0.75,
+    "typical_season_months": [6, 7, 8, 9]
+  },
+  "Tomatoes": {
+    "lifecycle": "annual",
+    "ndvi_peak": 0.78,
+    "typical_season_months": [4, 5, 6, 7]
+  },
+  "fallow/bare soil": {
+    "lifecycle": "perennial",
+    "ndvi_peak": 0.20,
+    "typical_season_months": []
+  }
+}

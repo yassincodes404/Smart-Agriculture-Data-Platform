@@ -18,7 +18,7 @@ from app.lands import geometry, repository
 logger = logging.getLogger(__name__)
 
 
-def run_sentinel_visual_fetch(land_id: int, db: Session, days: int = 365, update_progress=None) -> int:
+def run_sentinel_visual_fetch(land_id: int, db: Session, days: int = 60, update_progress=None) -> int:
     """
     Computes land bounding box, fetches up to 30 recent Sentinel-2 image pairs
     (true_color + NDVI) for the past year, downloads them into memory, and stores DB records.
@@ -51,7 +51,7 @@ def run_sentinel_visual_fetch(land_id: int, db: Session, days: int = 365, update
     downloaded = sentinel.fetch_and_download_sentinel_images(
         bbox=bbox,
         max_cloud_cover=20,
-        limit=30,
+        limit=5,
         days=days,
         update_progress=update_progress,
     )

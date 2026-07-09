@@ -108,6 +108,8 @@ def classify_tile_crop(
         return "fallow/bare soil"
 
     eligible = _eligible_profile_entries(tile_peak_month, profiles)
+    if not eligible:
+        return "Unknown"
     return min(eligible, key=lambda c: abs(c["peak"] - tile_ndvi_max))["name"]
 
 

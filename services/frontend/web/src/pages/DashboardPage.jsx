@@ -14,7 +14,7 @@ import "./mobile-home.css";
 function landStatusClass(status) {
   if (!status) return "info";
   const s = status.toLowerCase();
-  if (s === "ready" || s === "active") return "ready";
+  if (s === "ready" || s === "active" || s === "active_partial" || s === "completed") return "ready";
   if (s === "error" || s === "failed") return "error";
   if (s === "processing") return "processing";
   return "info";

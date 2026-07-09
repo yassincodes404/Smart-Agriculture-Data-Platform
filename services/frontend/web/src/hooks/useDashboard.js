@@ -26,7 +26,7 @@ export function useDashboard() {
   const [analyzingLandId, setAnalyzingLandId] = useState(null);
 
   const preferredLand = useMemo(
-    () => lands.find((l) => l.status === "ready" || l.status === "active") || lands[0] || null,
+    () => lands.find((l) => ["ready", "active", "active_partial", "completed"].includes(l.status)) || lands[0] || null,
     [lands]
   );
 
@@ -34,7 +34,7 @@ export function useDashboard() {
 
   const stats = useMemo(() => ({
     totalArea: lands.reduce((sum, l) => sum + (l.area_hectares || 0), 0),
-    readyCount: lands.filter((l) => l.status === "ready" || l.status === "active").length,
+    readyCount: lands.filter((l) => ["ready", "active", "active_partial", "completed"].includes(l.status)).length,
     processingCount: lands.filter((l) => l.status === "processing").length,
     errorCount: lands.filter((l) => l.status === "error").length,
     latestNDVI: ndviData.length > 0 ? ndviData[ndviData.length - 1]?.value : null,
@@ -53,7 +53,7 @@ export function useDashboard() {
 
       if (allLands.length > 0) {
         const primary =
-          allLands.find((l) => l.status === "ready" || l.status === "active") || allLands[0];
+          allLands.find((l) => ["ready", "active", "active_partial", "completed"].includes(l.status)) || allLands[0];
         const pid = primary.public_id;
 
         getLandTimeseries(pid, "crops")

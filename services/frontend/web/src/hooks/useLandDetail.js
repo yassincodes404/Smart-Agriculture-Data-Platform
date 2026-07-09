@@ -217,13 +217,13 @@ export function useLandDetail(landId) {
 
   useEffect(() => {
     let interval;
-    if (land && land.status !== "active" && land.status !== "ready") {
+    if (land && !["active", "ready", "active_partial", "completed"].includes(land.status)) {
       setReanalyzing(true);
       interval = setInterval(async () => {
         try {
           const updatedLand = await getLandDetail(landId);
           setLand(updatedLand);
-          if (updatedLand.status === "active" || updatedLand.status === "ready") {
+          if (["active", "ready", "active_partial", "completed"].includes(updatedLand.status)) {
             clearInterval(interval);
             fetchAll();
             setShowProgressModal(false);

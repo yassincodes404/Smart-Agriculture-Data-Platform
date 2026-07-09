@@ -63,6 +63,8 @@ _archive_backup_*
 # Project Specific
 data/
 !data/.gitkeep
+!**/data/reference/
+!**/data/reference/crop_profiles.json
 !Database/.gitkeep
 
 # Pytest / local SQLite artifacts
