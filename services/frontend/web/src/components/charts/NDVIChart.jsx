@@ -66,8 +66,8 @@ export default function NDVIChart({ data, compact = false }) {
   });
 
   const chartMargin = compact
-    ? { top: 8, right: 4, left: -16, bottom: 0 }
-    : { top: 10, right: 10, left: -20, bottom: 0 };
+    ? { top: 8, right: 4, left: -16, bottom: 20 }
+    : { top: 10, right: 10, left: -20, bottom: 24 };
 
   return (
     <div className={compact ? "ndvi-chart ndvi-chart--compact" : "ndvi-chart"} style={{ overflow: "hidden" }}>
@@ -82,7 +82,7 @@ export default function NDVIChart({ data, compact = false }) {
             dy={10}
           />
           <YAxis
-            domain={[(dataMin) => Math.min(0, dataMin), 1]}
+            domain={['auto', 'auto']}
             axisLine={false}
             tickLine={false}
             tick={{ fontSize: 12, fill: "var(--gray-500)" }}

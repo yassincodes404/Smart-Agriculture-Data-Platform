@@ -327,7 +327,7 @@ export default function CompareLandsPage() {
                       top: 10,
                       right: isMobile ? 10 : 30,
                       left: isMobile ? -16 : 0,
-                      bottom: 0,
+                      bottom: 24,
                     }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
@@ -341,11 +341,11 @@ export default function CompareLandsPage() {
                         const d = new Date(v);
                         return isMobile
                           ? `${d.getMonth() + 1}/${d.getDate()}`
-                          : v;
+                          : `${d.getMonth() + 1}/${d.getDate()}`;
                       }}
                     />
                     <YAxis
-                      domain={[(dataMin) => Math.min(0, dataMin), 1]}
+                      domain={['auto', 'auto']}
                       tick={{ fontSize: isMobile ? 10 : 12, fill: "var(--text-secondary)" }}
                       axisLine={false}
                       tickLine={false}
