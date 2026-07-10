@@ -194,7 +194,7 @@ export default function CompareLandsPage() {
     setDataB(dataA);
   };
 
-  const chartHeight = isMobile ? 220 : isMobileLayout ? 260 : 400;
+  const chartHeight = isMobile ? 320 : isMobileLayout ? 380 : 500;
 
   return (
     <div className={`anim-fade-in compare-container${isMobileLayout ? " compare-container--mobile" : ""}`}>
@@ -321,7 +321,7 @@ export default function CompareLandsPage() {
                 </div>
               )}
             </div>
-            <div className="compare-chart-card__chart">
+            <div className="compare-chart-card__chart" style={{ height: chartHeight, overflow: "hidden", position: "relative", minHeight: chartHeight }}>
               {mergedChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
@@ -349,8 +349,7 @@ export default function CompareLandsPage() {
                       height={50}
                     />
                     <YAxis
-                      domain={[0, 1]}
-                      allowDataOverflow={true}
+                      domain={[(dataMin) => Math.min(0, dataMin), 1]}
                       ticks={[0, 0.2, 0.4, 0.6, 0.8, 1]}
                       tick={{ fontSize: isMobile ? 10 : 12, fill: "#888" }}
                       axisLine={false}
