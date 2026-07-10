@@ -318,7 +318,7 @@ export default function CompareLandsPage() {
                 </div>
               )}
             </div>
-            <div className="compare-chart-card__chart" style={{ height: chartHeight, overflow: "hidden" }}>
+            <div className="compare-chart-card__chart">
               {mergedChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart
@@ -326,59 +326,71 @@ export default function CompareLandsPage() {
                     margin={{
                       top: 10,
                       right: isMobile ? 10 : 30,
-                      left: isMobile ? -16 : 0,
-                      bottom: 24,
+                      left: isMobile ? 0 : 8,
+                      bottom: 30,
                     }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: isMobile ? 10 : 12, fill: "var(--text-secondary)" }}
-                      axisLine={false}
+                      tick={{ fontSize: isMobile ? 10 : 12, fill: "#888" }}
+                      axisLine={{ stroke: "#e0e0e0" }}
                       tickLine={false}
-                      minTickGap={isMobile ? 48 : 30}
+                      minTickGap={isMobile ? 48 : 40}
                       tickFormatter={(v) => {
                         const d = new Date(v);
-                        return isMobile
-                          ? `${d.getMonth() + 1}/${d.getDate()}`
-                          : `${d.getMonth() + 1}/${d.getDate()}`;
+                        return `${d.getMonth() + 1}/${d.getDate()}`;
                       }}
+                      angle={-35}
+                      textAnchor="end"
+                      height={50}
                     />
                     <YAxis
-                      domain={['auto', 'auto']}
-                      tick={{ fontSize: isMobile ? 10 : 12, fill: "var(--text-secondary)" }}
+                      domain={[0, 1]}
+                      allowDataOverflow={true}
+                      tick={{ fontSize: isMobile ? 10 : 12, fill: "#888" }}
                       axisLine={false}
                       tickLine={false}
-                      width={isMobile ? 28 : 40}
+                      width={isMobile ? 32 : 44}
+                      tickFormatter={(v) => v.toFixed(1)}
                     />
                     <Tooltip
                       contentStyle={{
-                        borderRadius: "var(--radius-md)",
-                        border: "none",
+                        borderRadius: 8,
+                        border: "1px solid #e0e0e0",
                         boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                         fontSize: 13,
                       }}
+                      formatter={(value, name) => [value?.toFixed(3) ?? "—", name]}
+                      labelFormatter={(label) => {
+                        const d = new Date(label);
+                        return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+                      }}
                     />
                     {!isMobileLayout && (
-                      <Legend verticalAlign="top" height={32} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+                      <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                     )}
                     <Line
                       type="monotone"
                       name={displayA.name}
                       dataKey="ndviA"
-                      stroke="var(--green-600)"
+                      stroke="#16a34a"
                       strokeWidth={isMobile ? 2 : 3}
                       dot={false}
                       activeDot={{ r: 5 }}
+                      connectNulls={true}
+                      isAnimationActive={false}
                     />
                     <Line
                       type="monotone"
                       name={displayB.name}
                       dataKey="ndviB"
-                      stroke="var(--amber-500)"
+                      stroke="#f59e0b"
                       strokeWidth={isMobile ? 2 : 3}
                       dot={false}
                       activeDot={{ r: 5 }}
+                      connectNulls={true}
+                      isAnimationActive={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>
