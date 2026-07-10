@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { getMe, login as apiLogin, logout as apiLogout } from "../api";
+import { getMe, login as apiLogin, loginWithGoogle as apiLoginWithGoogle, logout as apiLogout } from "../api";
 
 const AuthContext = createContext(null);
 
@@ -29,13 +29,20 @@ export function AuthProvider({ children }) {
     return me;
   };
 
+  const loginWithGoogle = async (credential) => {
+    await apiLoginWithGoogle(credential);
+    const me = await getMe();
+    setUser(me);
+    return me;
+  };
+
   const logout = async () => {
     await apiLogout();
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, login, loginWithGoogle, logout }}>
       {children}
     </AuthContext.Provider>
   );

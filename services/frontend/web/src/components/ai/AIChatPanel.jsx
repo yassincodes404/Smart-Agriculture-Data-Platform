@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useBreakpoint } from "../../hooks/useBreakpoint";
 import { useConfirm } from "../../context/ConfirmContext";
 import {
@@ -208,69 +209,38 @@ export default function AIChatPanel({ landId, onResize, hasBottomNav = false, su
     };
   }, [isDragging, isMobileView]);
 
-  const mobilePanelStyle = isMobileView
-    ? {
-        height: mobilePanelHeight || "72vh",
-        bottom: hasBottomNav
-          ? "calc(60px + env(safe-area-inset-bottom, 0px))"
-          : 0,
-        maxHeight: hasBottomNav
-          ? "calc(100dvh - var(--topbar-height) - 60px - env(safe-area-inset-bottom, 0px))"
-          : "85dvh",
-      }
-    : { width: `${sidebarWidth}px` };
+  // Mobile: full-screen overlay (CSS). Portal escapes topbar stacking context.
+  const mobilePanelStyle = isMobileView ? undefined : { width: `${sidebarWidth}px` };
 
-  return (
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.classList.add("ai-chat-open");
+    return () => {
+      document.body.style.overflow = prev;
+      document.documentElement.classList.remove("ai-chat-open");
+    };
+  }, [isOpen]);
+
+  const overlay = (
     <>
-      {/* Launcher */}
-      <button
-        type="button"
-        id="ai-chat-toggle"
-        className={[
-          "ai-chat-launcher",
-          isMobileView ? "ai-chat-launcher--mobile" : "ai-chat-launcher--desktop",
-          !hasBottomNav && isMobileView ? "ai-chat-launcher--no-nav" : "",
-          isOpen || suppressLauncher ? "ai-chat-launcher--hidden" : "",
-        ].filter(Boolean).join(" ")}
-        onClick={() => setIsOpen(true)}
-        aria-label="Open AgriMind AI assistant"
-      >
-        <span className="ai-chat-launcher__avatar">
-          <LeafIcon size={isMobileView ? 18 : 26} />
-        </span>
-        {isMobileView && (
-          <>
-            <span className="ai-chat-launcher__text">
-              <span className="ai-chat-launcher__title">AgriMind AI</span>
-              <span className="ai-chat-launcher__hint">Ask about NDVI, soil, irrigation…</span>
-            </span>
-            <span className="ai-chat-launcher__chevron" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="18 15 12 9 6 15" />
-              </svg>
-            </span>
-          </>
-        )}
-      </button>
-
-      {/* Backdrop */}
       {isOpen && (
         <div
           className={`ai-chat-backdrop${!isMobileView ? " ai-chat-backdrop--desktop" : ""}`}
           onClick={() => setIsOpen(false)}
           aria-hidden="true"
-          style={hasBottomNav && isMobileView ? { bottom: "calc(60px + env(safe-area-inset-bottom, 0px))" } : undefined}
         />
       )}
 
-      {/* Panel */}
       <div
         className={[
           "ai-chat-panel",
           isMobileView ? "ai-chat-panel--mobile" : "ai-chat-panel--desktop",
+          isMobileView && hasBottomNav ? "ai-chat-panel--above-nav" : "",
           isOpen ? "ai-chat-panel--open" : "ai-chat-panel--closed",
           isDragging ? "ai-chat-panel--dragging" : "",
-        ].join(" ")}
+        ].filter(Boolean).join(" ")}
         style={mobilePanelStyle}
         role="dialog"
         aria-label="AgriMind AI chat"
@@ -311,8 +281,12 @@ export default function AIChatPanel({ landId, onResize, hasBottomNav = false, su
             </button>
             <button
               type="button"
-              className="ai-chat-header__btn ai-chat-header__btn--icon"
-              onClick={() => setIsOpen(false)}
+              className="ai-chat-header__btn ai-chat-header__btn--icon ai-chat-header__btn--close"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsOpen(false);
+              }}
               aria-label="Close chat"
             >
               ✕
@@ -430,6 +404,45 @@ export default function AIChatPanel({ landId, onResize, hasBottomNav = false, su
           )}
         </div>
       </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Launcher stays in-page; overlay is portaled above topbar */}
+      <button
+        type="button"
+        id="ai-chat-toggle"
+        className={[
+          "ai-chat-launcher",
+          isMobileView ? "ai-chat-launcher--mobile" : "ai-chat-launcher--desktop",
+          !hasBottomNav && isMobileView ? "ai-chat-launcher--no-nav" : "",
+          isOpen || suppressLauncher ? "ai-chat-launcher--hidden" : "",
+        ].filter(Boolean).join(" ")}
+        onClick={() => setIsOpen(true)}
+        aria-label="Open AgriMind AI assistant"
+      >
+        <span className="ai-chat-launcher__avatar">
+          <LeafIcon size={isMobileView ? 18 : 26} />
+        </span>
+        {isMobileView && (
+          <>
+            <span className="ai-chat-launcher__text">
+              <span className="ai-chat-launcher__title">AgriMind AI</span>
+              <span className="ai-chat-launcher__hint">Ask about NDVI, soil, irrigation…</span>
+            </span>
+            <span className="ai-chat-launcher__chevron" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="18 15 12 9 6 15" />
+              </svg>
+            </span>
+          </>
+        )}
+      </button>
+
+      {typeof document !== "undefined"
+        ? createPortal(overlay, document.body)
+        : overlay}
     </>
   );
 }

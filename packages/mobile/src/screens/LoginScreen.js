@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -11,13 +11,27 @@ import {
 } from "react-native";
 import { colors, spacing, radius, layout } from "@agri/shared/theme";
 import { useAuth } from "../context/AuthContext";
+import { GoogleSignin } from "@react-native-google-signin/google-signin";
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  useEffect(() => {
+    // Configure Google Sign-In
+    // The webClientId should be your Web client ID from Google Cloud Console
+    // webClientId MUST be a Web OAuth client ID so the ID token audience
+    // matches backend GOOGLE_CLIENT_ID (not the Android client ID).
+    GoogleSignin.configure({
+      webClientId:
+        "596375721075-itbl6d2i44kekhniujmmm0g8jovoc9i6.apps.googleusercontent.com",
+      offlineAccess: true,
+    });
+  }, []);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -28,6 +42,25 @@ export default function LoginScreen() {
       setError(e.message || "Login failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken || userInfo.idToken;
+      if (idToken) {
+        await loginWithGoogle(idToken);
+      } else {
+        throw new Error("No ID token received from Google");
+      }
+    } catch (e) {
+      setError(e.message || "Google Sign-In failed");
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -57,11 +90,29 @@ export default function LoginScreen() {
           onChangeText={setPassword}
           secureTextEntry
         />
-        <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
+        <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading || googleLoading}>
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.buttonText}>Sign In</Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.dividerContainer}>
+          <View style={styles.divider} />
+          <Text style={styles.dividerText}>OR</Text>
+          <View style={styles.divider} />
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.button, styles.googleButton]} 
+          onPress={handleGoogleLogin} 
+          disabled={loading || googleLoading}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color={colors.green800} />
+          ) : (
+            <Text style={styles.googleButtonText}>Sign in with Google</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -116,6 +167,31 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: "#fff",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: spacing.lg,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  dividerText: {
+    marginHorizontal: spacing.sm,
+    color: colors.gray400,
+    fontWeight: "600",
+  },
+  googleButton: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  googleButtonText: {
+    color: colors.gray800,
     fontWeight: "600",
     fontSize: 16,
   },

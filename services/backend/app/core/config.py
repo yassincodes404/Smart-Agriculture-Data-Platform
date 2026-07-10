@@ -45,8 +45,10 @@ class Settings(BaseSettings):
     COPERNICUS_CLIENT_ID: str = ""
     COPERNICUS_CLIENT_SECRET: str = ""
 
-    # Google OAuth 2.0
+    # Google OAuth 2.0 — Web client ID used as ID-token audience (must match frontend)
     GOOGLE_CLIENT_ID: str = ""
+    # Optional extra audiences (comma-separated web client IDs), e.g. Firebase web client
+    GOOGLE_CLIENT_IDS: str = ""
     GOOGLE_CLIENT_SECRET: str = ""  # Optional, used if switching to full OAuth code flow later
 
     # Satellite monitoring

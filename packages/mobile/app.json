@@ -15,21 +15,32 @@
         {
           "locationWhenInUsePermission": "AgriData needs your location to center the map on your farm."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.agridata.egypt",
+      "bundleIdentifier": "com.company.smart_agri",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "AgriData needs your location to center the map on your farm."
       }
     },
     "android": {
-      "package": "com.agridata.egypt",
-      "permissions": ["ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+      "package": "com.company.smart_agri",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "extra": {
-      "apiBaseUrl": "http://10.0.2.2:8000/api/v1"
+      "apiBaseUrl": "https://smartagri.azurewebsites.net/api/v1",
+      "eas": {
+        "projectId": "27c201d9-c446-4ee0-8c3c-1b6fbd84a5e9"
+      }
     }
   }
 }

@@ -6,7 +6,7 @@ import * as SecureStore from "expo-secure-store";
 import Constants from "expo-constants";
 
 const API_BASE =
-  Constants.expoConfig?.extra?.apiBaseUrl || "http://10.0.2.2:8000/api/v1";
+  Constants.expoConfig?.extra?.apiBaseUrl || "https://smartagri.azurewebsites.net/api/v1";
 
 const TOKEN_KEY = "agri_token";
 const REFRESH_KEY = "agri_refresh_token";
@@ -135,6 +135,16 @@ export async function login(email, password) {
   const data = await apiRequest("/auth/login", {
     method: "POST",
     body: JSON.stringify({ email, password }),
+  });
+  await setToken(data.access_token);
+  if (data.refresh_token) await setRefreshToken(data.refresh_token);
+  return data;
+}
+
+export async function loginWithGoogle(credential) {
+  const data = await apiRequest("/auth/google", {
+    method: "POST",
+    body: JSON.stringify({ credential }),
   });
   await setToken(data.access_token);
   if (data.refresh_token) await setRefreshToken(data.refresh_token);

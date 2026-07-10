@@ -1,10 +1,16 @@
 {
-  "appId": "com.smartag.app",
+  "appId": "com.company.smart_agri",
   "appName": "AgriData Egypt",
   "webDir": "dist",
   "server": {
     "androidScheme": "https",
-    "allowNavigation": ["smartagri.azurewebsites.net"]
+    "allowNavigation": [
+      "smartagri.azurewebsites.net",
+      "accounts.google.com",
+      "*.google.com",
+      "*.googleapis.com",
+      "*.gstatic.com"
+    ]
   },
   "android": {
     "allowMixedContent": true
