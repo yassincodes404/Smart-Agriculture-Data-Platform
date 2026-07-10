@@ -109,13 +109,9 @@ export default function CompareLandsPage() {
             return s === "ready" || s === "active" || s === "active_partial" || s === "completed";
           });
           setLands(validLands);
-          if (validLands.length > 0) {
+          if (validLands.length > 1) {
             setLandAId(validLands[0].public_id);
-            setLandBId(
-              validLands.length > 1
-                ? validLands[1].public_id
-                : validLands[0].public_id
-            );
+            setLandBId(validLands[1].public_id);
           }
         }
       } catch {
@@ -212,17 +208,17 @@ export default function CompareLandsPage() {
         </div>
       )}
 
-      {lands.length === 0 && !error && (
+      {lands.length < 2 && !error && (
         <div className="compare-empty-state">
           <div className="compare-empty-state__icon">📊</div>
-          <h3 className="text-h3">No lands ready to compare</h3>
+          <h3 className="text-h3">Not enough lands to compare</h3>
           <p className="text-body-sm" style={{ color: "var(--text-secondary)", marginTop: "var(--space-sm)" }}>
-            Register lands and wait for processing to complete, then compare them here.
+            Register at least two lands and wait for processing to complete, then compare them here.
           </p>
         </div>
       )}
 
-      {lands.length > 0 && (
+      {lands.length > 1 && (
         <div className="compare-selectors-grid">
           <div className="compare-picker compare-picker--a compare-card-a anim-stagger" style={{ "--stagger-index": 0 }}>
             <label className="compare-picker__label compare-picker__label--a" htmlFor="compare-land-a">
@@ -235,7 +231,7 @@ export default function CompareLandsPage() {
               onChange={(e) => setLandAId(e.target.value)}
             >
               {lands.map((l) => (
-                <option key={l.public_id || l.land_id} value={l.public_id}>{l.name}</option>
+                <option key={l.public_id || l.land_id} value={l.public_id} disabled={l.public_id === landBId}>{l.name}</option>
               ))}
             </select>
           </div>
@@ -267,7 +263,7 @@ export default function CompareLandsPage() {
               onChange={(e) => setLandBId(e.target.value)}
             >
               {lands.map((l) => (
-                <option key={l.public_id || l.land_id} value={l.public_id}>{l.name}</option>
+                <option key={l.public_id || l.land_id} value={l.public_id} disabled={l.public_id === landAId}>{l.name}</option>
               ))}
             </select>
           </div>
@@ -328,8 +324,8 @@ export default function CompareLandsPage() {
                   <LineChart
                     data={mergedChartData}
                     margin={{
-                      top: 8,
-                      right: isMobile ? 8 : 24,
+                      top: 10,
+                      right: isMobile ? 10 : 30,
                       left: isMobile ? -16 : 0,
                       bottom: 0,
                     }}
