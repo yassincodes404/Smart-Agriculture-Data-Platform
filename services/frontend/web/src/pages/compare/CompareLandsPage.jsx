@@ -21,8 +21,10 @@ import "./CompareLands.css";
 const METRICS = [
   { key: "crop", label: "Crop Type" },
   { key: "area", label: "Area" },
-  { key: "ndvi", label: "Latest NDVI" },
+  { key: "location", label: "Coordinates" },
+  { key: "health", label: "Health Status" },
   { key: "healthScore", label: "AI Health Score" },
+  { key: "ndvi", label: "Latest NDVI" },
 ];
 
 function getDisplayData(data) {
@@ -37,6 +39,7 @@ function getDisplayData(data) {
   return {
     name: data.detail.name,
     area: `${data.detail.area_hectares?.toFixed(2) || "—"} ha`,
+    location: data.detail.latitude ? `${Number(data.detail.latitude).toFixed(4)}, ${Number(data.detail.longitude).toFixed(4)}` : "—",
     crop: latestCrop,
     ndvi: latestNdvi,
     health,
@@ -348,6 +351,7 @@ export default function CompareLandsPage() {
                     <YAxis
                       domain={[0, 1]}
                       allowDataOverflow={true}
+                      ticks={[0, 0.2, 0.4, 0.6, 0.8, 1]}
                       tick={{ fontSize: isMobile ? 10 : 12, fill: "#888" }}
                       axisLine={false}
                       tickLine={false}
