@@ -305,7 +305,7 @@ export default function CompareLandsPage() {
             </div>
           </div>
 
-          <div className="compare-chart-card anim-stagger" style={{ "--stagger-index": 4 }}>
+          <div className="compare-chart-card anim-stagger" style={{ "--stagger-index": 4, minHeight: chartHeight + 100 }}>
             <div className="compare-chart-card__header">
               <h2 className="compare-chart-card__title">NDVI Performance</h2>
               {isMobileLayout && (
@@ -321,16 +321,16 @@ export default function CompareLandsPage() {
                 </div>
               )}
             </div>
-            <div className="compare-chart-card__chart" style={{ height: chartHeight, overflow: "hidden", position: "relative", minHeight: chartHeight }}>
+            <div className="compare-chart-card__chart" style={{ height: chartHeight, position: "relative" }}>
               {mergedChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height={chartHeight}>
                   <LineChart
                     data={mergedChartData}
                     margin={{
                       top: 10,
                       right: isMobile ? 10 : 30,
                       left: isMobile ? 0 : 8,
-                      bottom: 30,
+                      bottom: 60,
                     }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" />
