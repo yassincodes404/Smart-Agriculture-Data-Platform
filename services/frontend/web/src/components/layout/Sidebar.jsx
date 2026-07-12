@@ -81,18 +81,12 @@ const icons = {
       <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   ),
-  compare: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 21l6-6M9 8l-5 5M4 13v5h5M4 18l6-6" />
-    </svg>
-  ),
 };
 
-const navItems = [
+const baseNavItems = [
   { section: "MAIN" },
   { to: "/dashboard", icon: "dashboard", label: "Dashboard" },
   { to: "/lands",     icon: "lands",     label: "Lands Explorer" },
-  { to: "/lands/compare", icon: "compare", label: "Compare Lands" },
   { to: "/lands/new", icon: "addLand",   label: "Add New Land" },
 
   { section: "INSIGHTS" },
@@ -103,16 +97,25 @@ const navItems = [
   { to: "/team",    icon: "team",    label: "Team" },
   { to: "/about",   icon: "about",   label: "About" },
   { to: "/profile", icon: "profile", label: "Profile" },
-  { to: "/logs",    icon: "logs",    label: "Activity Logs" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isDrawer, onClose }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  const navItems = [
+    ...baseNavItems,
+    ...(user?.role === "admin" ? [{ to: "/logs", icon: "logs", label: "Activity Logs" }] : []),
+  ];
+
+  const handleNavClick = () => {
+    if (isDrawer && onClose) onClose();
+  };
 
   const handleLogout = async () => {
     await logout();
     navigate("/login");
+    if (isDrawer && onClose) onClose();
   };
 
   /** Get user's initials for avatar */
@@ -132,6 +135,16 @@ export default function Sidebar() {
           </svg>
         </div>
         <span className="sidebar__logo-text">AgriData Egypt</span>
+
+        {isDrawer && onClose && (
+          <button
+            onClick={onClose}
+            className="sidebar__close-btn touch-target"
+            aria-label="Close sidebar"
+          >
+            ×
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -153,6 +166,7 @@ export default function Sidebar() {
               className={({ isActive }) =>
                 `sidebar__link${isActive ? " sidebar__link--active" : ""}`
               }
+              onClick={handleNavClick}
             >
               <span className="sidebar__link-icon">{icons[item.icon]}</span>
               <span className="sidebar__link-text">{item.label}</span>

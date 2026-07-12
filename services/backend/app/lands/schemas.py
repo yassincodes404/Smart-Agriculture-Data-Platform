@@ -63,11 +63,13 @@ class LandDiscoverRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
     geometry: GeoJSONPolygon
+    metadata_: dict[str, Any] = Field(default_factory=dict)
 
 
 class LandDiscoverAccepted(BaseModel):
     status: str
     land_id: int
+    public_id: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +78,7 @@ class LandDiscoverAccepted(BaseModel):
 
 class LandDetailResponse(BaseModel):
     land_id: int
+    public_id: str
     name: str
     description: Optional[str]
     latitude: float
@@ -83,18 +86,21 @@ class LandDetailResponse(BaseModel):
     area_hectares: Optional[float]
     status: str
     boundary_polygon: Optional[dict[str, Any]]
+    metadata_: Optional[dict[str, Any]] = None
     created_at: str
 
 
 class LandListItem(BaseModel):
     """Lightweight land summary for list views."""
     land_id: int
+    public_id: str
     name: str
     latitude: float
     longitude: float
     area_hectares: Optional[float]
     status: str
     created_at: str
+    latest_image_url: Optional[str] = None
 
 
 class LandListResponse(BaseModel):
@@ -153,6 +159,11 @@ class CropZoneItem(BaseModel):
     estimated_yield_tons: Optional[float] = None
     first_detected: Optional[str] = None
     last_updated: Optional[str] = None
+    detection_method: Optional[str] = None
+    trust_tier: Optional[str] = None
+    separation_score: Optional[float] = None
+    ambiguous: bool = False
+    show_confidence_bar: bool = False
 
 
 class CropZoneListResponse(BaseModel):

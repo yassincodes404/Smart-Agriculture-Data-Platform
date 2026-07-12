@@ -2,12 +2,21 @@
  * pages/RegisterPage.jsx
  * ----------------------
  * Registration page — same split layout as LoginPage.
+ * Supports native Google Sign-In on Capacitor.
  */
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import {
+  isNativePlatform,
+  initNativeGoogleSignIn,
+  signInWithGoogleNative,
+  GOOGLE_WEB_CLIENT_ID,
+} from "../services/googleAuth";
 import "./AuthPages.css";
+
+const isNative = isNativePlatform();
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -16,10 +25,58 @@ export default function RegisterPage() {
   const [role, setRole] = useState("viewer");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const { register } = useAuth();
+  const { register, googleSignIn } = useAuth();
   const navigate = useNavigate();
+
+  const handleGoogleSuccess = useCallback(
+    async (credential) => {
+      setError("");
+      setGoogleLoading(true);
+      try {
+        await googleSignIn(credential);
+        navigate("/dashboard");
+      } catch (err) {
+        setError(err.message || "Google sign up failed.");
+      } finally {
+        setGoogleLoading(false);
+      }
+    },
+    [googleSignIn, navigate]
+  );
+
+  useEffect(() => {
+    if (isNative) {
+      initNativeGoogleSignIn().catch((e) => {
+        console.warn("Native Google Sign-In init:", e?.message || e);
+      });
+      return;
+    }
+
+    const clientId = GOOGLE_WEB_CLIENT_ID;
+    if (window.google && clientId) {
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: (response) => {
+          if (response.credential) {
+            handleGoogleSuccess(response.credential);
+          }
+        },
+      });
+
+      const buttonDiv = document.getElementById("google-signup-button");
+      if (buttonDiv) {
+        window.google.accounts.id.renderButton(buttonDiv, {
+          theme: "outline",
+          size: "large",
+          width: "100%",
+          text: "signup_with",
+        });
+      }
+    }
+  }, [handleGoogleSuccess]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -45,6 +102,22 @@ export default function RegisterPage() {
     }
   };
 
+  const handleNativeGoogle = async () => {
+    setError("");
+    setGoogleLoading(true);
+    try {
+      const idToken = await signInWithGoogleNative();
+      await googleSignIn(idToken);
+      navigate("/dashboard");
+    } catch (err) {
+      if (err?.code !== "SIGN_IN_CANCELED") {
+        setError(err.message || "Google sign up failed.");
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <div className="auth-layout">
       {/* ---------- Left Hero Panel ---------- */}
@@ -52,14 +125,8 @@ export default function RegisterPage() {
         <div className="auth-hero__overlay" />
         <div className="auth-hero__content">
           <div className="auth-hero__logo">
-            <div className="auth-hero__logo-icon">
-              <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M16 2C16 2 6 10 6 18C6 23.5 10.5 28 16 28C21.5 28 26 23.5 26 18C26 10 16 2 16 2Z" fill="rgba(255,255,255,0.9)"/>
-                <path d="M16 8C16 8 10 14 10 19C10 22.3 12.7 25 16 25C19.3 25 22 22.3 22 19C22 14 16 8 16 8Z" fill="rgba(34,197,94,0.8)"/>
-                <path d="M16 14V25" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
-                <path d="M16 18L19 15" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" strokeLinecap="round"/>
-                <path d="M16 21L13 18" stroke="rgba(255,255,255,0.5)" strokeWidth="1.2" strokeLinecap="round"/>
-              </svg>
+            <div className="auth-hero__logo-icon" style={{ background: "transparent", padding: 0 }}>
+              <img src="/logo.png" alt="AgriData Egypt Logo" style={{ width: "100%", height: "100%", objectFit: "contain", borderRadius: "12px" }} />
             </div>
             <span className="auth-hero__logo-text">AgriData Egypt</span>
           </div>
@@ -108,6 +175,12 @@ export default function RegisterPage() {
       {/* ---------- Right Form Panel ---------- */}
       <div className="auth-form-panel">
         <div className="auth-form-container">
+          {/* Mobile-only logo above form */}
+          <div className="auth-mobile-logo">
+            <img src="/logo.png" alt="AgriData Egypt" className="auth-mobile-logo__img" />
+            <span className="auth-mobile-logo__text">AgriData Egypt</span>
+          </div>
+
           <div className="auth-form-header">
             <h2 className="auth-form-title">Create your account</h2>
             <p className="auth-form-subtitle">Fill in your details to get started</p>
@@ -211,7 +284,6 @@ export default function RegisterPage() {
                 >
                   <option value="viewer">Viewer</option>
                   <option value="analyst">Analyst</option>
-                  <option value="admin">Admin</option>
                 </select>
               </div>
             </div>
@@ -219,7 +291,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               className="btn btn--primary btn--full"
-              disabled={loading}
+              disabled={loading || googleLoading}
               id="register-submit"
             >
               {loading ? (
@@ -231,6 +303,49 @@ export default function RegisterPage() {
                 "Create Account"
               )}
             </button>
+
+            <div style={{ marginTop: "1rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+                <span style={{ fontSize: "12px", color: "var(--gray-500)" }}>or</span>
+                <div style={{ flex: 1, height: "1px", background: "var(--gray-200)" }} />
+              </div>
+              {isNative ? (
+                <button
+                  type="button"
+                  className="btn btn--full google-native-btn"
+                  onClick={handleNativeGoogle}
+                  disabled={loading || googleLoading}
+                  id="google-signup-native"
+                >
+                  {googleLoading ? (
+                    <span className="btn__loading">
+                      <span className="spinner" />
+                      Connecting to Google...
+                    </span>
+                  ) : (
+                    <>
+                      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+                        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                      </svg>
+                      Continue with Google
+                    </>
+                  )}
+                </button>
+              ) : (
+                <>
+                  <div id="google-signup-button" style={{ display: "flex", justifyContent: "center" }} />
+                  {!GOOGLE_WEB_CLIENT_ID && (
+                    <p style={{ fontSize: "11px", color: "#f59e0b", textAlign: "center", marginTop: "4px" }}>
+                      Set VITE_GOOGLE_CLIENT_ID in .env to enable Google Sign-In
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
           </form>
 
           <div className="auth-form-footer">

@@ -1,0 +1,340 @@
+.crop-confirm-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  /* Above AgriMind (1100), land tabs, and bottom nav */
+  z-index: 1300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  animation: crop-modal-fade-in 0.2s ease;
+}
+
+@media (min-width: 640px) {
+  .crop-confirm-modal__backdrop {
+    align-items: center;
+    padding: 16px;
+  }
+}
+
+@keyframes crop-modal-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes crop-modal-slide-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.crop-confirm-modal {
+  background: var(--bg-card, #fff);
+  border-radius: 16px 16px 0 0;
+  width: 100%;
+  max-width: 480px;
+  max-height: 92vh;
+  overflow-y: auto;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.12), 0 20px 40px rgba(0, 0, 0, 0.1);
+  animation: crop-modal-slide-up 0.25s ease;
+}
+
+@media (min-width: 640px) {
+  .crop-confirm-modal {
+    border-radius: 16px;
+  }
+}
+
+.crop-confirm-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 0;
+}
+
+.crop-confirm-modal__header-text h3 {
+  margin: 0 0 4px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.crop-confirm-modal__header-text p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.crop-confirm-modal__close {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: var(--bg-subtle, #f1f5f9);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.crop-confirm-modal__close:hover {
+  background: var(--border-subtle, #e2e8f0);
+}
+
+.crop-confirm-modal__body {
+  padding: 16px 20px 20px;
+}
+
+.crop-confirm-modal__suggestion-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--green-50, #ecfdf5) 0%, var(--bg-card, #fff) 60%);
+}
+
+.crop-confirm-modal__suggestion-card--high {
+  border-color: var(--green-200, #a7f3d0);
+  background: linear-gradient(135deg, var(--green-50, #ecfdf5) 0%, #f0fdf4 100%);
+}
+
+.crop-confirm-modal__suggestion-card--low {
+  border-color: var(--warning-border, #fcd34d);
+  background: linear-gradient(135deg, var(--warning-light, #fffbeb) 0%, var(--bg-card, #fff) 60%);
+}
+
+.crop-confirm-modal__suggestion-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.crop-confirm-modal__crop-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.crop-confirm-modal__confidence-pill {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-subtle, #f1f5f9);
+  color: var(--text-secondary);
+}
+
+.crop-confirm-modal__confidence-pill--high {
+  background: var(--green-100, #d1fae5);
+  color: var(--green-700, #047857);
+}
+
+.crop-confirm-modal__confidence-bar-wrap {
+  margin-bottom: 12px;
+}
+
+.crop-confirm-modal__confidence-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.crop-confirm-modal__confidence-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-subtle, #e2e8f0);
+  overflow: hidden;
+}
+
+.crop-confirm-modal__confidence-bar > div {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.crop-confirm-modal__signals {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.crop-confirm-modal__signal {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.crop-confirm-modal__signal-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.crop-confirm-modal__signal-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.crop-confirm-modal__mode-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  background: var(--bg-subtle, #f1f5f9);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.crop-confirm-modal__mode-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.crop-confirm-modal__mode-tab--active {
+  background: var(--bg-card, #fff);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.crop-confirm-modal__field {
+  margin-bottom: 12px;
+}
+
+.crop-confirm-modal__label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.crop-confirm-modal__select,
+.crop-confirm-modal__textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  background: var(--bg-card, #fff);
+}
+
+.crop-confirm-modal__select:focus,
+.crop-confirm-modal__textarea:focus {
+  outline: 2px solid var(--green-400, #4ade80);
+  outline-offset: 1px;
+}
+
+.crop-confirm-modal__actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+@media (min-width: 480px) {
+  .crop-confirm-modal__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+}
+
+.crop-confirm-modal__actions .btn {
+  width: 100%;
+}
+
+@media (min-width: 480px) {
+  .crop-confirm-modal__actions .btn {
+    width: auto;
+  }
+}
+
+.crop-suggestion-banner {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.crop-suggestion-banner__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.crop-suggestion-banner__title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.crop-suggestion-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.crop-suggestion-banner--likely {
+  border-left: 3px solid var(--green-500, #22c55e);
+}
+
+.crop-suggestion-banner--uncertain {
+  border-left: 3px solid var(--warning-border, #f59e0b);
+}
+
+/* Global state while crop modal is portaled to body */
+body.crop-modal-open {
+  overflow: hidden;
+}
+
+body.crop-modal-open .land-detail-mobile-nav {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+body.crop-modal-open .ai-chat-launcher,
+body.crop-modal-open .ai-chat-panel,
+body.crop-modal-open .ai-chat-backdrop {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+@media (max-width: 1024px) {
+  .crop-confirm-modal__backdrop {
+    align-items: flex-end;
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .crop-confirm-modal {
+    max-height: min(88dvh, calc(100dvh - var(--topbar-height, 56px) - 72px));
+  }
+}
+
+@media (min-width: 1025px) {
+  .crop-confirm-modal__backdrop {
+    align-items: center;
+    padding: 24px;
+  }
+}

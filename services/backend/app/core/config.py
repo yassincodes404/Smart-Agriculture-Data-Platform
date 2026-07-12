@@ -14,21 +14,42 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
 
     # Database
-    DATABASE_URL: str = "mysql+pymysql://agri_user:agri_pass@mysql:3306/agriculture"
+    DATABASE_URL: str = "postgresql+psycopg2://agri_user:agri_pass@postgres:5432/agriculture"
 
     # JWT / Auth
     SECRET_KEY: str = "change-this-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Security — API key encryption at rest (Fernet symmetric)
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # IMPORTANT: Set this in .env.backend in production — never use the default!
+    ENCRYPTION_KEY: str = "HZxV7QmRx6NfBz3kYvP9CG1oTqLU5WwD4JdAeI2nMs0="
+
+    # CORS — comma-separated list of allowed origins (empty = allow all, dev only!)
+    # Example: "http://localhost:5173,https://yourapp.com"
+    CORS_ORIGINS: str = ""
 
     # External services
     OPENAI_API_KEY: str = ""
     LOG_LEVEL: str = "INFO"
     LAND_MONITOR_INTERVAL_MINUTES: int = 1440
 
+    # AI — auto-analyze interval for the scheduler (hours between stale insight refresh)
+    AI_AUTO_ANALYZE_HOURS: int = 6
+    # AI insights are considered stale after this many hours
+    AI_INSIGHT_STALE_HOURS: int = 24
+
     # Sentinel-2 / Copernicus Data Space
     COPERNICUS_CLIENT_ID: str = ""
     COPERNICUS_CLIENT_SECRET: str = ""
+
+    # Google OAuth 2.0 — Web client ID used as ID-token audience (must match frontend)
+    GOOGLE_CLIENT_ID: str = ""
+    # Optional extra audiences (comma-separated web client IDs), e.g. Firebase web client
+    GOOGLE_CLIENT_IDS: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""  # Optional, used if switching to full OAuth code flow later
 
     # Satellite monitoring
     SATELLITE_IMAGE_INTERVAL_DAYS: int = 5

@@ -14,12 +14,12 @@ from app.models.land import Land
 # Suppress real HTTP in all tests in this module
 @pytest.fixture(autouse=True)
 def _mock_connectors():
-    climate = {"temperature_celsius": 25.0, "humidity_pct": 55.0, "rainfall_mm": 0.0}
-    soil = {"date": "2026-04-24", "et0_mm_per_day": 5.0, "soil_moisture_pct": 28.0}
-    with patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_current_land_climate",
-               return_value=climate), \
-         patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_soil_and_et0",
-               return_value=soil):
+    from app.tests.conftest import POLYGON_CLIMATE_MOCK_META, POLYGON_CLIMATE_MOCK_RECORDS
+
+    with patch(
+        "app.pipeline.land_discovery_pipeline.open_meteo_polygon.fetch_polygon_historical_climate",
+        return_value=(POLYGON_CLIMATE_MOCK_RECORDS, POLYGON_CLIMATE_MOCK_META),
+    ):
         yield
 
 

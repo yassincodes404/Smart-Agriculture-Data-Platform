@@ -20,7 +20,15 @@ os.environ["DATABASE_URL"] = "sqlite://"
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import sessionmaker
+
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_sqlite(element, compiler, **kw):
+    """Allow PostgreSQL JSONB columns in SQLite test schema."""
+    return "JSON"
 
 import app.db.session as db_session_module
 
@@ -85,3 +93,50 @@ def client(db_session):
 def make_token(user_id: int, role: str = "viewer") -> str:
     """Create a valid test JWT token with the given user_id and role."""
     return security.create_access_token(data={"sub": str(user_id)})
+
+
+# ---------------------------------------------------------------------------
+# Open-Meteo polygon sampling mocks (discovery pipeline)
+# ---------------------------------------------------------------------------
+
+POLYGON_CLIMATE_MOCK_RECORDS = [
+    {
+        "date": "2026-04-24",
+        "temperature_max_c": 22.5,
+        "temperature_min_c": 18.0,
+        "humidity_pct": 55.0,
+        "rainfall_mm": 0.1,
+        "et0_mm": 5.0,
+        "soil_moisture_pct": 28.0,
+    }
+]
+
+POLYGON_CLIMATE_MOCK_META = {
+    "spatial_scope": "polygon_mean",
+    "sample_count": 5,
+    "temp_spread_c": 0.5,
+    "high_spread": False,
+    "large_field_warning": False,
+    "aggregate_trust_tier": "observed",
+    "points": [],
+    "updated_at": "2026-04-24T00:00:00+00:00",
+}
+
+
+def patch_polygon_climate_mock(*, records=None, spatial_meta=None):
+    """Context manager patching polygon historical fetch in discovery pipeline."""
+    from contextlib import contextmanager
+    from unittest.mock import patch
+
+    recs = records if records is not None else POLYGON_CLIMATE_MOCK_RECORDS
+    meta = spatial_meta if spatial_meta is not None else POLYGON_CLIMATE_MOCK_META
+
+    @contextmanager
+    def _cm():
+        with patch(
+            "app.pipeline.land_discovery_pipeline.open_meteo_polygon.fetch_polygon_historical_climate",
+            return_value=(recs, meta),
+        ):
+            yield
+
+    return _cm()

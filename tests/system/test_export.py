@@ -2,7 +2,7 @@ import sys
 import io
 import traceback
 import pandas as pd
-from app.db.database import SessionLocal
+from app.db.session import SessionLocal
 from app.lands.service import export_land_to_excel
 
 def main():

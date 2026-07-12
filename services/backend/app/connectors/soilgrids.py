@@ -23,6 +23,8 @@ Scale factors (d_factor) are read from the API response itself.
 from __future__ import annotations
 
 import logging
+import time
+from dataclasses import dataclass
 from typing import Any, Optional
 
 import httpx
@@ -34,79 +36,144 @@ ISRIC_BASE = "https://rest.isric.org/soilgrids/v2.0/properties/query"
 PROPERTIES = ["phh2o", "soc", "clay", "sand", "silt", "bdod", "nitrogen", "cec"]
 DEPTHS = ["0-5cm", "5-15cm", "15-30cm"]
 
+RETRY_BACKOFF_SECONDS = (5, 15, 45)
+MAX_ATTEMPTS = 3
+DEFAULT_TIMEOUT = 45.0
+
+
+@dataclass
+class SoilFetchResult:
+    profile: Optional[dict[str, Any]]
+    status: str
+    attempts: int
+    last_error: Optional[str] = None
+
 
 def fetch_soil_profile(
     lat: float,
     lon: float,
-    timeout: float = 25.0,
+    timeout: float = DEFAULT_TIMEOUT,
+    *,
+    max_attempts: int = MAX_ATTEMPTS,
+) -> SoilFetchResult:
+    """
+    Fetch ISRIC SoilGrids soil property profile with retries.
+
+    Returns SoilFetchResult with status: success | timeout | error | empty.
+    """
+    last_error: Optional[str] = None
+    attempts = 0
+
+    for attempt in range(max_attempts):
+        attempts = attempt + 1
+        try:
+            profile = _fetch_once(lat, lon, timeout=timeout)
+            if profile is None:
+                last_error = "SoilGrids returned no usable data"
+                status = "empty"
+            else:
+                return SoilFetchResult(
+                    profile=profile,
+                    status="success",
+                    attempts=attempts,
+                )
+        except httpx.TimeoutException as exc:
+            last_error = str(exc)
+            status = "timeout"
+            logger.warning(
+                "SoilGrids timeout attempt=%s/%s lat=%s lon=%s",
+                attempts,
+                max_attempts,
+                lat,
+                lon,
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            last_error = str(exc)
+            status = "error"
+            logger.warning(
+                "SoilGrids request failed attempt=%s/%s: %s",
+                attempts,
+                max_attempts,
+                exc,
+            )
+
+        if attempt < max_attempts - 1:
+            delay = RETRY_BACKOFF_SECONDS[min(attempt, len(RETRY_BACKOFF_SECONDS) - 1)]
+            time.sleep(delay)
+
+    return SoilFetchResult(
+        profile=None,
+        status=status,
+        attempts=attempts,
+        last_error=last_error,
+    )
+
+
+def _fetch_once(
+    lat: float,
+    lon: float,
+    timeout: float,
 ) -> Optional[dict[str, Any]]:
-    """
-    Fetch ISRIC SoilGrids soil property profile for a location.
-
-    Returns a nested dict:
-    {
-      "lat": 30.5, "lon": 31.0,
-      "properties": {
-        "phh2o": {"0-5cm": 7.8, "5-15cm": 7.9, "15-30cm": 8.0},
-        "clay":  {"0-5cm": 30.7, ...},
-        "sand":  {"0-5cm": 42.1, ...},
-        ...
-      },
-      "texture_class": "clay_loam",   # derived from sand/clay
-      "source": "ISRIC-SoilGrids-v2"
-    }
-
-    Returns None if request fails or all values are null.
-    """
-    params: list[tuple[str, str]] = []
-    params.append(("lon", str(lon)))
-    params.append(("lat", str(lat)))
-    for prop in PROPERTIES:
-        params.append(("property", prop))
-    for depth in DEPTHS:
-        params.append(("depth", depth))
-    params.append(("value", "mean"))
-
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            resp = client.get(ISRIC_BASE, params=params, follow_redirects=True)
-            resp.raise_for_status()
-            data = resp.json()
-    except (httpx.HTTPError, ValueError) as exc:
-        logger.warning("SoilGrids request failed: %s", exc)
-        return None
-
-    layers = data.get("properties", {}).get("layers", [])
-    if not layers:
-        logger.warning("SoilGrids returned no layers for lat=%s lon=%s", lat, lon)
-        return None
-
     result: dict[str, dict[str, Optional[float]]] = {}
     any_value = False
 
-    for layer in layers:
-        name = layer.get("name")
-        d_factor = layer.get("unit_measure", {}).get("d_factor", 1) or 1
-        if not name:
-            continue
-        depth_vals: dict[str, Optional[float]] = {}
-        for depth_entry in layer.get("depths", []):
-            label = depth_entry.get("label")
-            raw = depth_entry.get("values", {}).get("mean")
-            if label is None:
-                continue
-            if raw is not None:
-                depth_vals[label] = round(raw / d_factor, 4)
-                any_value = True
-            else:
-                depth_vals[label] = None
-        result[name] = depth_vals
+    # Chunk properties to avoid SoilGrids API timeouts (chunk by 1 for maximum safety)
+    chunk_size = 1
+    with httpx.Client(timeout=timeout) as client:
+        for i in range(0, len(PROPERTIES), chunk_size):
+            chunk_props = PROPERTIES[i:i + chunk_size]
+            params: list[tuple[str, str]] = []
+            params.append(("lon", str(lon)))
+            params.append(("lat", str(lat)))
+            for prop in chunk_props:
+                params.append(("property", prop))
+            for depth in DEPTHS:
+                params.append(("depth", depth))
+            params.append(("value", "mean"))
+
+            # Retry per chunk to avoid restarting the whole process
+            chunk_success = False
+            for attempt in range(3):
+                try:
+                    resp = client.get(ISRIC_BASE, params=params, follow_redirects=True)
+                    resp.raise_for_status()
+                    data = resp.json()
+                    
+                    layers = data.get("properties", {}).get("layers", [])
+                    if layers:
+                        for layer in layers:
+                            name = layer.get("name")
+                            d_factor = layer.get("unit_measure", {}).get("d_factor", 1) or 1
+                            if not name:
+                                continue
+                            depth_vals: dict[str, Optional[float]] = {}
+                            for depth_entry in layer.get("depths", []):
+                                label = depth_entry.get("label")
+                                raw = depth_entry.get("values", {}).get("mean")
+                                if label is None:
+                                    continue
+                                if raw is not None:
+                                    depth_vals[label] = round(raw / d_factor, 4)
+                                    any_value = True
+                                else:
+                                    depth_vals[label] = None
+                            result[name] = depth_vals
+                    chunk_success = True
+                    break
+                except httpx.TimeoutException:
+                    if attempt == 2:
+                        logger.warning("SoilGrids chunk timeout after 3 attempts for lat=%s lon=%s chunk=%s", lat, lon, chunk_props)
+                        raise
+                    time.sleep(2)
+                except httpx.HTTPError:
+                    if attempt == 2:
+                        raise
+                    time.sleep(2)
 
     if not any_value:
         logger.warning("SoilGrids all-null response for lat=%s lon=%s", lat, lon)
         return None
 
-    # Derive texture class from topsoil sand + clay %
     texture = _texture_class(
         clay_pct=_top_value(result, "clay"),
         sand_pct=_top_value(result, "sand"),

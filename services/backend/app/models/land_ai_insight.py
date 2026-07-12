@@ -8,8 +8,7 @@ discovery pipeline or re-analysis. These are shown on the UI with an AI badge.
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
-from sqlalchemy.dialects.mysql import JSON
-from sqlalchemy.types import JSON as SAJSON
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.user import Base
 
@@ -30,7 +29,7 @@ class LandAiInsight(Base):
     # Detailed markdown body from Grok
     body = Column(Text, nullable=False)
     # Optional structured data (e.g. estimated yield, recommended action)
-    structured_data = Column(SAJSON().with_variant(JSON, "mysql"), nullable=True)
+    structured_data = Column(JSONB, nullable=True)
     # Confidence 0-1 as rated by the model (or None)
     confidence = Column(Float, nullable=True)
     # Which Grok model produced this

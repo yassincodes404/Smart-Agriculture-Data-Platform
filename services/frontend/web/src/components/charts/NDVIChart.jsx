@@ -46,7 +46,7 @@ function NDVITooltip({ active, payload }) {
   );
 }
 
-export default function NDVIChart({ data }) {
+export default function NDVIChart({ data, compact = false }) {
   if (!data || data.length === 0) {
     return (
       <div className="empty-state" style={{ padding: "var(--space-xl)" }}>
@@ -65,10 +65,14 @@ export default function NDVIChart({ data }) {
     };
   });
 
+  const chartMargin = compact
+    ? { top: 8, right: 4, left: -16, bottom: 20 }
+    : { top: 10, right: 10, left: -20, bottom: 24 };
+
   return (
-    <div style={{ width: "100%", height: "100%", minHeight: 250 }}>
+    <div className={compact ? "ndvi-chart ndvi-chart--compact" : "ndvi-chart"} style={{ overflow: "hidden" }}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+        <LineChart data={chartData} margin={chartMargin}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
           <XAxis
             dataKey="date"
@@ -78,7 +82,7 @@ export default function NDVIChart({ data }) {
             dy={10}
           />
           <YAxis
-            domain={[0, 1]}
+            domain={['auto', 'auto']}
             axisLine={false}
             tickLine={false}
             tick={{ fontSize: 12, fill: "var(--gray-500)" }}

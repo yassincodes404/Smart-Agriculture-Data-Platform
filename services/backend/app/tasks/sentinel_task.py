@@ -18,10 +18,10 @@ from app.lands import geometry, repository
 logger = logging.getLogger(__name__)
 
 
-def run_sentinel_visual_fetch(land_id: int, db: Session, days: int = 90, update_progress=None) -> int:
+def run_sentinel_visual_fetch(land_id: int, db: Session, days: int = 180, limit: int = 30, update_progress=None) -> int:
     """
     Computes land bounding box, fetches up to 30 recent Sentinel-2 image pairs
-    (true_color + NDVI) for the past 90 days, downloads them into memory, and stores DB records.
+    (true_color + NDVI) for the past year, downloads them into memory, and stores DB records.
 
     Returns the number of images stored.
     """
@@ -50,8 +50,8 @@ def run_sentinel_visual_fetch(land_id: int, db: Session, days: int = 90, update_
         
     downloaded = sentinel.fetch_and_download_sentinel_images(
         bbox=bbox,
-        max_cloud_cover=15,
-        limit=30,
+        max_cloud_cover=20,
+        limit=limit,
         days=days,
         update_progress=update_progress,
     )
@@ -83,12 +83,21 @@ def run_sentinel_visual_fetch(land_id: int, db: Session, days: int = 90, update_
                              land_id, date_str, img["image_type"])
                 continue
 
+            ndvi_mean = None
+            if img["image_type"] == "ndvi":
+                primary = repository.get_primary_crop_zone(db, land_id)
+                zone_id = int(primary.zone_id) if primary else None
+                ndvi_mean = repository.find_crop_ndvi_near_date(
+                    db, land_id, ts, zone_id=zone_id
+                )
+
             repository.insert_land_image(
                 db=db,
                 land_id=land_id,
                 image_data=img["image_data"],
                 image_type=img["image_type"],
                 cloud_cover_pct=img["cloud_cover_pct"],
+                ndvi_mean=ndvi_mean,
                 source_id=src_id,
                 timestamp=ts,
             )

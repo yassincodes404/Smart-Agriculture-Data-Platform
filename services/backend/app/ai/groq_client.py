@@ -22,6 +22,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models.ai_settings import AiApiKey
+from app.security.encryption import decrypt_string
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +93,10 @@ class GroqClient:
             .order_by(AiApiKey.sort_order.asc())
             .all()
         )
-        return [
-            {
+        result = []
+        for k in keys:
+            decrypted = decrypt_string(k.api_key) if k.api_key else ""
+            result.append({
                 "key_id": k.key_id,
                 "label": k.label or f"Key #{k.key_id}",
                 "provider": k.provider,
@@ -101,11 +104,9 @@ class GroqClient:
                 "quota_exceeded": k.quota_exceeded,
                 "quota_reset_at": k.quota_reset_at.isoformat() if k.quota_reset_at else None,
                 "sort_order": k.sort_order,
-                # Never expose the full key — show masked version only
-                "key_preview": f"...{k.api_key[-6:]}" if len(k.api_key) > 6 else "******",
-            }
-            for k in keys
-        ]
+                "key_preview": f"...{decrypted[-6:]}" if len(decrypted) > 6 else "******",
+            })
+        return result
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -133,6 +134,7 @@ class GroqClient:
                     k.quota_reset_at = None
                     self.db.add(k)
                     self.db.flush()
+                    
                     available.append(k)
             else:
                 available.append(k)
@@ -151,8 +153,9 @@ class GroqClient:
         Attempt a request with a specific API key.
         Marks the key as quota-exceeded on 429/401 and returns None so the caller retries.
         """
+        plain_key = decrypt_string(key_row.api_key) if key_row.api_key else ""
         headers = {
-            "Authorization": f"Bearer {key_row.api_key}",
+            "Authorization": f"Bearer {plain_key}",
             "Content-Type": "application/json",
         }
         payload = {
@@ -192,8 +195,20 @@ class GroqClient:
                 return None
                 
             if resp.status_code == 400:
+                try:
+                    error_code = resp.json().get("error", {}).get("code")
+                    if error_code in ("organization_restricted", "invalid_api_key"):
+                        logger.warning("Groq key_id=%s is restricted or invalid.", key_row.key_id)
+                        key_row.is_active = False
+                        key_row.label = (key_row.label or "") + " [RESTRICTED]"
+                        self.db.add(key_row)
+                        self.db.flush()
+                        return None
+                except Exception:
+                    pass
+
                 # Application error (e.g. bad payload, model unavailable, context too large)
-                # DO NOT deactivate the key for this.
+                # DO NOT deactivate the key for this unless it's a known restriction.
                 logger.error(
                     "Groq key_id=%s returned 400 Bad Request: %s",
                     key_row.key_id, resp.text[:500],

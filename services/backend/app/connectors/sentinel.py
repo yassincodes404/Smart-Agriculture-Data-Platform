@@ -178,6 +178,19 @@ def fetch_sentinel_visual_urls(
         logger.error("Failed to fetch Sentinel URLs: %s", e)
         return []
 
+def _empty_timeseries():
+    import numpy as np
+    return {
+        "dates": [],
+        "quality_scores": [],
+        "B02": np.array([]),
+        "B03": np.array([]),
+        "B04": np.array([]),
+        "B08": np.array([]),
+        "B11": np.array([]),
+    }
+
+
 def fetch_sentinel_timeseries(bbox: list[float], days: int = 90, update_progress=None) -> dict:
     """
     Fetches a real time-series of Sentinel-2 L2A tiles over `days` using STAC.
@@ -196,7 +209,40 @@ def fetch_sentinel_timeseries(bbox: list[float], days: int = 90, update_progress
     import planetary_computer
     import odc.stac
     import pandas as pd
-    
+
+    try:
+        return _fetch_sentinel_timeseries_impl(
+            bbox=bbox,
+            days=days,
+            update_progress=update_progress,
+            np=np,
+            datetime=datetime,
+            timedelta=timedelta,
+            timezone=timezone,
+            Client=Client,
+            planetary_computer=planetary_computer,
+            odc_stac=odc.stac,
+            pd=pd,
+        )
+    except Exception as exc:
+        logger.exception("Sentinel timeseries fetch failed for bbox=%s: %s", bbox, exc)
+        return _empty_timeseries()
+
+
+def _fetch_sentinel_timeseries_impl(
+    *,
+    bbox,
+    days,
+    update_progress,
+    np,
+    datetime,
+    timedelta,
+    timezone,
+    Client,
+    planetary_computer,
+    odc_stac,
+    pd,
+) -> dict:
     end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=days)
     datetime_str = f"{start_date.strftime('%Y-%m-%dT%H:%M:%SZ')}/{end_date.strftime('%Y-%m-%dT%H:%M:%SZ')}"
@@ -220,13 +266,13 @@ def fetch_sentinel_timeseries(bbox: list[float], days: int = 90, update_progress
     if not items:
         if update_progress:
             update_progress("No clear Sentinel-2 imagery found. Falling back to empty arrays.")
-        return {"dates": [], "quality_scores": [], "B02": np.array([]), "B03": np.array([]), "B04": np.array([]), "B08": np.array([]), "B11": np.array([])}
+        return _empty_timeseries()
         
     if update_progress:
         update_progress(f"Found {len(items)} matching satellite scenes. Downloading multi-spectral bands (B02, B03, B04, B08, B11)...")
         
     # Load data using odc.stac (10m resolution approx = 0.0001 deg)
-    ds = odc.stac.load(
+    ds = odc_stac.load(
         items,
         bbox=bbox,
         bands=["B02", "B03", "B04", "B08", "B11", "SCL"], # SCL is scene classification layer for cloud masking
@@ -241,10 +287,9 @@ def fetch_sentinel_timeseries(bbox: list[float], days: int = 90, update_progress
     # Compute the dataset (download happens here)
     ds = ds.compute()
     
-    # --- DATA ENGINEERING ENHANCEMENT ---
     # Save the raw multi-spectral data to disk for Data Scientists before extracting NumPy arrays.
     import os
-    save_dir = "/app/data/raw/sentinel2"
+    save_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "raw", "sentinel2")
     os.makedirs(save_dir, exist_ok=True)
     try:
         # Create a unique filename based on the bbox and current date

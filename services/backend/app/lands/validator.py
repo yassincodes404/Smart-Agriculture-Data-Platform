@@ -52,7 +52,7 @@ def validate_agricultural_land(lat: float, lon: float) -> None:
         logger.warning("Nominatim API request failed, skipping OSM validation: %s", exc)
 
     # ---------------------------------------------------------
-    # Phase 2: Historical Vegetation Signature via MODIS
+    # Phase 2: Registration-time vegetation check (MODIS ORNL API; stored NDVI uses Sentinel-2)
     # ---------------------------------------------------------
     try:
         # Fetch 90 days of NDVI history (approx 6-12 records)

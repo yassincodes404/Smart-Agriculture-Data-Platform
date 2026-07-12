@@ -31,9 +31,12 @@ from app.models.land_water import LandWater
 
 @pytest.fixture(autouse=True)
 def _mock_open_meteo():
-    fake = {"temperature_celsius": 22.5, "humidity_pct": 55.0, "rainfall_mm": 0.1}
-    path = "app.pipeline.land_discovery_pipeline.open_meteo.fetch_current_land_climate"
-    with patch(path, return_value=fake):
+    from app.tests.conftest import POLYGON_CLIMATE_MOCK_META, POLYGON_CLIMATE_MOCK_RECORDS
+
+    with patch(
+        "app.pipeline.land_discovery_pipeline.open_meteo_polygon.fetch_polygon_historical_climate",
+        return_value=(POLYGON_CLIMATE_MOCK_RECORDS, POLYGON_CLIMATE_MOCK_META),
+    ):
         yield
 
 

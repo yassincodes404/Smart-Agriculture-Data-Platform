@@ -238,13 +238,22 @@ class TestDiscoveryPipelineWithSoilET0:
         """
         from app.lands import repository as repo
 
-        climate_mock = {"temperature_celsius": 25.0, "humidity_pct": 60.0, "rainfall_mm": 0.0}
-        soil_mock = {"date": "2026-04-24", "et0_mm_per_day": 5.2, "soil_moisture_pct": 28.5}
+        from app.tests.conftest import POLYGON_CLIMATE_MOCK_META
 
-        with patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_current_land_climate",
-                   return_value=climate_mock), \
-             patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_soil_and_et0",
-                   return_value=soil_mock):
+        polygon_records = [{
+            "date": "2026-04-24",
+            "temperature_max_c": 25.0,
+            "temperature_min_c": 18.0,
+            "humidity_pct": 60.0,
+            "rainfall_mm": 0.0,
+            "et0_mm": 5.2,
+            "soil_moisture_pct": 28.5,
+        }]
+
+        with patch(
+            "app.pipeline.land_discovery_pipeline.open_meteo_polygon.fetch_polygon_historical_climate",
+            return_value=(polygon_records, POLYGON_CLIMATE_MOCK_META),
+        ):
 
             resp = client.post(
                 "/api/v1/lands/discover",
@@ -269,12 +278,20 @@ class TestDiscoveryPipelineWithSoilET0:
 
     def test_discovery_still_completes_when_soil_connector_fails(self, client, db_session):
         """Pipeline should not fail if the soil connector returns None."""
-        climate_mock = {"temperature_celsius": 25.0, "humidity_pct": 60.0, "rainfall_mm": 0.0}
+        from app.tests.conftest import POLYGON_CLIMATE_MOCK_META
 
-        with patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_current_land_climate",
-                   return_value=climate_mock), \
-             patch("app.pipeline.land_discovery_pipeline.open_meteo.fetch_soil_and_et0",
-                   return_value=None):
+        polygon_records = [{
+            "date": "2026-04-24",
+            "temperature_max_c": 25.0,
+            "temperature_min_c": 18.0,
+            "humidity_pct": 60.0,
+            "rainfall_mm": 0.0,
+        }]
+
+        with patch(
+            "app.pipeline.land_discovery_pipeline.open_meteo_polygon.fetch_polygon_historical_climate",
+            return_value=(polygon_records, POLYGON_CLIMATE_MOCK_META),
+        ):
             resp = client.post(
                 "/api/v1/lands/discover",
                 json={"name": "Test Fallback", "geometry": self._POLYGON},

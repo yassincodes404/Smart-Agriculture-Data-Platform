@@ -1,244 +1,325 @@
 /**
- * pages/DashboardPage.jsx
- * -----------------------
- * Main Dashboard — fetches real data from the backend.
- * Shows aggregate stats, recent land, NDVI chart, and intelligence feed.
+ * pages/DashboardPage.jsx — Home dashboard
  */
 
-import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { listLands, getLandTimeseries, getCropHealth, getHarvestPrediction, healthCheck } from "../services/api";
+import { useBreakpoint } from "../hooks/useBreakpoint";
+import { useDashboard } from "../hooks/useDashboard";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from "recharts";
 import NDVIChart from "../components/charts/NDVIChart";
 import "./Dashboard.css";
+import "./mobile-home.css";
+
+function landStatusClass(status) {
+  if (!status) return "info";
+  const s = status.toLowerCase();
+  if (s === "ready" || s === "active" || s === "active_partial" || s === "completed") return "ready";
+  if (s === "error" || s === "failed") return "error";
+  if (s === "processing") return "processing";
+  return "info";
+}
+
+function ChevronRight() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  );
+}
 
 export default function DashboardPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { isDrawer, isMobile } = useBreakpoint();
+  const isMobileLayout = isDrawer;
+  const {
+    lands,
+    ndviData,
+    loading,
+    aiInsights,
+    aiLoading,
+    aiError,
+    analyzingLandId,
+    preferredLandId,
+    stats,
+    triggerAnalysis,
+  } = useDashboard();
 
-  const [lands, setLands] = useState([]);
-  const [ndviData, setNdviData] = useState([]);
-  const [cropHealth, setCropHealth] = useState(null);
-  const [harvest, setHarvest] = useState(null);
-  const [backendOk, setBackendOk] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        // Check backend health
-        healthCheck().then((r) => setBackendOk(r.status === "backend running")).catch(() => setBackendOk(false));
-
-        // Fetch all lands
-        const landsRes = await listLands();
-        const allLands = landsRes.lands || [];
-        setLands(allLands);
-
-        // Prefer a land that already has an active/ready status for dashboard metrics.
-        if (allLands.length > 0) {
-          const preferredLand = allLands.find((land) => land.status === "ready" || land.status === "active") || allLands[0];
-          const preferredLandId = preferredLand.land_id;
-          getLandTimeseries(preferredLandId, "crops")
-            .then((r) => setNdviData(r.points || []))
-            .catch(() => {});
-          getCropHealth(preferredLandId)
-            .then((r) => setCropHealth(r))
-            .catch(() => {});
-          getHarvestPrediction(preferredLandId)
-            .then((r) => setHarvest(r))
-            .catch(() => {});
-        }
-      } catch {
-        // non-critical
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
-
-  const totalArea = lands.reduce((sum, l) => sum + (l.area_hectares || 0), 0);
-  const readyCount = lands.filter((l) => l.status === "ready" || l.status === "active").length;
-  const processingCount = lands.filter((l) => l.status === "processing").length;
-  const latestNDVI = ndviData.length > 0 ? ndviData[ndviData.length - 1]?.value : null;
+  const firstName = user?.email?.split("@")[0] || "Farmer";
 
   if (loading) {
     return (
-      <div className="anim-fade-in">
-        <div className="page-header">
+      <div className="anim-fade-in dashboard-page">
+        <div className="premium-hero dashboard-hero dashboard-hero--mobile">
           <h1 className="page-header__title">Welcome back</h1>
           <p className="page-header__subtitle">Loading your dashboard...</p>
         </div>
-        <div className="grid-4" style={{ marginBottom: "var(--space-xl)" }}>
-          {[0, 1, 2, 3].map((i) => <div className="skeleton" key={i} style={{ height: 100, borderRadius: "var(--radius-lg)" }} />)}
+        <div className="dashboard-stats">
+          {[0, 1, 2, 3].map((i) => (
+            <div className="skeleton dashboard-stat" key={i} style={{ height: 88 }} />
+          ))}
         </div>
       </div>
     );
   }
 
+  const otherCount = Math.max(
+    0,
+    lands.length - stats.readyCount - stats.processingCount - stats.errorCount
+  );
+
+  const pieData = [
+    { name: "Active", value: stats.readyCount, color: "var(--green-500)" },
+    { name: "Processing", value: stats.processingCount, color: "var(--info)" },
+    { name: "Error", value: stats.errorCount, color: "var(--error)" },
+    { name: "Other", value: otherCount, color: "var(--gray-400)" },
+  ].filter((d) => d.value > 0);
+
+  const recentLands = lands.slice(0, isMobileLayout ? 8 : 6);
+
   return (
-    <div className="anim-fade-in">
-      <div className="page-header">
-        <h1 className="page-header__title">
-          Welcome back, {user?.email?.split("@")[0] || "Farmer"} 👋
+    <div className="anim-fade-in dashboard-page">
+      <div className={`premium-hero dashboard-hero${isMobileLayout ? " dashboard-hero--mobile" : ""}`}>
+        <h1 className="page-header__title dashboard-hero__title">
+          Welcome, {firstName} 👋
         </h1>
-        <p className="page-header__subtitle">
-          Here's the latest intelligence from your {lands.length} registered land{lands.length !== 1 ? "s" : ""}.
+        <p className="page-header__subtitle dashboard-hero__subtitle">
+          Intelligence from {lands.length} registered land{lands.length !== 1 ? "s" : ""}.
         </p>
       </div>
 
-      {processingCount > 0 && (
-        <div className="alert alert--warning" style={{ marginBottom: "var(--space-lg)" }}>
-          {processingCount} land{processingCount !== 1 ? "s are" : " is"} still processing, so some readings may stay empty
-          until the backend analysis finishes.
+      {isMobileLayout && (
+        <div className="dashboard-quick-actions anim-stagger" style={{ "--stagger-index": 0 }}>
+          <button type="button" className="dashboard-quick-action" onClick={() => navigate("/lands")}>
+            <span className="dashboard-quick-action__icon dashboard-quick-action__icon--green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 6l9-4 9 4" />
+                <path d="M3 6v12l9 4 9-4V6" />
+              </svg>
+            </span>
+            My Lands
+          </button>
+          <button type="button" className="dashboard-quick-action" onClick={() => navigate("/lands/new")}>
+            <span className="dashboard-quick-action__icon dashboard-quick-action__icon--blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </span>
+            Add Land
+          </button>
+          <button type="button" className="dashboard-quick-action" onClick={() => navigate("/lands/compare")}>
+            <span className="dashboard-quick-action__icon dashboard-quick-action__icon--purple">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M10 3H5a2 2 0 00-2 2v14a2 2 0 002 2h5" />
+                <path d="M14 3h5a2 2 0 012 2v14a2 2 0 01-2 2h-5" />
+                <path d="M12 3v18" />
+              </svg>
+            </span>
+            Compare
+          </button>
         </div>
       )}
 
-      {/* System Status */}
-      <div className="anim-stagger" style={{ "--stagger-index": 0 }}>
-        {backendOk !== null && (
-          <div className={`alert alert--${backendOk ? "success" : "error"}`} style={{ marginBottom: "var(--space-lg)" }}>
-            {backendOk
-              ? "✅ All systems operational — Backend API, Database, and Frontend connected."
-              : "⚠️ Backend API is unreachable. Some features may not work."}
+      {stats.processingCount > 0 && (
+        <div className="alert alert--warning">
+          {stats.processingCount} land{stats.processingCount !== 1 ? "s are" : " is"} still processing.
+        </div>
+      )}
+
+      <div className="dashboard-stats anim-stagger" style={{ "--stagger-index": 1 }}>
+        <div
+          className="dashboard-stat dashboard-stat--clickable"
+          onClick={() => navigate("/lands")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === "Enter" && navigate("/lands")}
+        >
+          <div className="dashboard-stat__icon" style={{ background: "var(--green-50)", color: "var(--green-600)" }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 6l9-4 9 4" />
+              <path d="M3 6v12l9 4 9-4V6" />
+            </svg>
           </div>
-        )}
+          <div className="dashboard-stat__value" style={{ color: "var(--green-600)" }}>{lands.length}</div>
+          <div className="dashboard-stat__label">Total Lands</div>
+        </div>
+        <div className="dashboard-stat">
+          <div className="dashboard-stat__icon" style={{ background: "var(--info-light)", color: "var(--info)" }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <path d="M3 9h18M9 3v18" />
+            </svg>
+          </div>
+          <div className="dashboard-stat__value" style={{ color: "var(--info)" }}>{stats.totalArea.toFixed(1)}</div>
+          <div className="dashboard-stat__label">Hectares</div>
+        </div>
+        <div className="dashboard-stat">
+          <div className="dashboard-stat__icon" style={{ background: "var(--warning-light)", color: "var(--amber-500)" }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
+          </div>
+          <div className="dashboard-stat__value" style={{ color: "var(--amber-500)" }}>
+            {stats.latestNDVI !== null ? stats.latestNDVI.toFixed(2) : "—"}
+          </div>
+          <div className="dashboard-stat__label">Latest NDVI</div>
+        </div>
+        <div className="dashboard-stat">
+          <div className="dashboard-stat__icon" style={{ background: "var(--green-50)", color: "var(--green-600)" }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          </div>
+          <div className="dashboard-stat__value" style={{ color: "var(--green-600)" }}>
+            {stats.readyCount}/{lands.length}
+          </div>
+          <div className="dashboard-stat__label">Active</div>
+        </div>
       </div>
 
-      {/* Stat Cards */}
-      <div className="grid-4 anim-stagger" style={{ "--stagger-index": 1, marginBottom: "var(--space-xl)" }}>
-        <div className="stat-card stat-card--green" onClick={() => navigate("/lands")} style={{ cursor: "pointer" }}>
-          <div className="stat-card__content">
-            <div className="stat-card__value">{lands.length}</div>
-            <div className="stat-card__label">Total Lands</div>
-          </div>
-        </div>
-        <div className="stat-card stat-card--blue">
-          <div className="stat-card__content">
-            <div className="stat-card__value">{totalArea.toFixed(1)}</div>
-            <div className="stat-card__label">Total Hectares</div>
-          </div>
-        </div>
-        <div className="stat-card stat-card--amber">
-          <div className="stat-card__content">
-            <div className="stat-card__value">{latestNDVI !== null ? latestNDVI.toFixed(2) : "—"}</div>
-            <div className="stat-card__label">Latest NDVI</div>
-          </div>
-        </div>
-        <div className="stat-card stat-card--green">
-          <div className="stat-card__content">
-            <div className="stat-card__value">{readyCount}/{lands.length}</div>
-            <div className="stat-card__label">Lands Active</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Two-column layout: NDVI chart + Intelligence */}
       <div className="dashboard-split anim-stagger" style={{ "--stagger-index": 2 }}>
-        {/* NDVI Chart */}
-        <div className="card card--no-hover" style={{ flex: 2 }}>
-          <div className="section-header" style={{ marginBottom: "var(--space-md)" }}>
-            <h2 className="section-header__title">NDVI Vegetation Index</h2>
-            <span className="badge badge--info">{ndviData.length} observations</span>
+        <div className="dashboard-chart-card card--no-hover dashboard-chart-card--ndvi">
+          <div className="dashboard-chart-card__header">
+            <h2 className="dashboard-chart-card__title">NDVI Vegetation Index</h2>
+            <span className="badge badge--info">{ndviData.length} obs</span>
           </div>
-          {ndviData.length > 0 ? (
-            <div style={{ height: 200, width: "100%", marginTop: "var(--space-md)" }}>
-              <NDVIChart data={ndviData} />
+          <div className="dashboard-chart-card__chart dashboard-chart-card__chart--ndvi">
+            {ndviData.length > 0 ? (
+              <NDVIChart data={ndviData} compact />
+            ) : (
+              <div className="dashboard-chart-empty">
+                <p className="text-body-sm">No NDVI data available yet.</p>
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="dashboard-chart-card card--no-hover dashboard-chart-card--pie">
+          <div className="dashboard-chart-card__header">
+            <h2 className="dashboard-chart-card__title">Lands Breakdown</h2>
+          </div>
+          <div className="dashboard-chart-card__chart dashboard-chart-card__chart--pie">
+            {pieData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy={isMobile ? "46%" : "48%"}
+                    innerRadius={isMobile ? 40 : 56}
+                    outerRadius={isMobile ? 58 : 76}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: "8px", border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }} />
+                  <Legend verticalAlign="bottom" height={32} iconSize={8} wrapperStyle={{ fontSize: 11, lineHeight: "14px" }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="dashboard-chart-empty">
+                <p className="text-body-sm">No land status data yet.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {preferredLandId && (
+        <div className="ai-insights-panel anim-stagger" style={{ "--stagger-index": 3 }}>
+          <div className="ai-insights-header">
+            <div>
+              <span className="ai-badge">✨ AI Agronomist</span>
+              <h2 className="section-header__title" style={{ marginTop: "var(--space-sm)" }}>Deep Intelligence</h2>
+            </div>
+            <button type="button" className="ai-trigger-btn" onClick={triggerAnalysis} disabled={analyzingLandId === preferredLandId}>
+              {analyzingLandId === preferredLandId ? "Analyzing..." : "Generate AI Analysis"}
+            </button>
+          </div>
+          {aiLoading ? (
+            <div style={{ padding: "var(--space-xl)", textAlign: "center", color: "var(--text-secondary)" }}>Loading AI Insights...</div>
+          ) : aiError ? (
+            <div className="alert alert--error" style={{ margin: "var(--space-md)", padding: "var(--space-lg)" }}>{aiError}</div>
+          ) : aiInsights.length > 0 ? (
+            <div className="ai-card-grid">
+              {aiInsights.map((insight) => (
+                <div key={insight.insight_id} className="ai-insight-card">
+                  <div className="ai-insight-title">{insight.title}</div>
+                  <div className="ai-insight-body">{insight.body}</div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="empty-state" style={{ padding: "var(--space-xl)" }}>
-              <p className="text-body-sm">No NDVI data available yet.</p>
+              <p className="text-body-sm">No AI insights yet. Tap the button above to run an analysis.</p>
             </div>
           )}
         </div>
+      )}
 
-        {/* Intelligence Feed */}
-        <div className="card card--no-hover" style={{ flex: 1 }}>
-          <div className="section-header" style={{ marginBottom: "var(--space-md)" }}>
-            <h2 className="section-header__title">Intelligence</h2>
-            <span className="badge badge--info">
-              <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 12, height: 12 }}>
-                <path d="M8 1a7 7 0 100 14A7 7 0 008 1zm-.5 3a.5.5 0 011 0v4a.5.5 0 01-1 0V4zm.5 7.5a.75.75 0 110-1.5.75.75 0 010 1.5z" />
-              </svg>
-              AI
-            </span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-sm)" }}>
-            {cropHealth && (
-              <div className="intel-item">
-                <div className="intel-item__dot" style={{ background: cropHealth.health_score >= 70 ? "var(--green-500)" : "var(--amber-500)" }} />
-                <div>
-                  <div className="text-body-sm" style={{ fontWeight: 600 }}>Crop Health: {cropHealth.health_score}/100</div>
-                  <div className="text-caption">{cropHealth.advice?.slice(0, 100)}...</div>
-                </div>
-              </div>
-            )}
-            {harvest && harvest.prediction_available && (
-              <div className="intel-item">
-                <div className="intel-item__dot" style={{ background: harvest.days_to_harvest <= 14 ? "var(--amber-500)" : "var(--green-500)" }} />
-                <div>
-                  <div className="text-body-sm" style={{ fontWeight: 600 }}>
-                    Harvest in {harvest.days_to_harvest} days
-                  </div>
-                  <div className="text-caption">
-                    Window: {harvest.estimated_harvest_start} → {harvest.estimated_harvest_end}
-                  </div>
-                </div>
-              </div>
-            )}
-            {latestNDVI !== null && (
-              <div className="intel-item">
-                <div className="intel-item__dot" style={{ background: latestNDVI > 0.5 ? "var(--green-500)" : "var(--amber-500)" }} />
-                <div>
-                  <div className="text-body-sm" style={{ fontWeight: 600 }}>NDVI: {latestNDVI.toFixed(2)}</div>
-                  <div className="text-caption">
-                    Stage: {ndviData[ndviData.length - 1]?.payload?.growth_stage?.replace("_", " ")} •
-                    Trend: {ndviData[ndviData.length - 1]?.payload?.ndvi_trend}
-                  </div>
-                </div>
-              </div>
-            )}
-            {!cropHealth && !harvest && latestNDVI === null && (
-              <div className="empty-state" style={{ padding: "var(--space-md)" }}>
-                <p className="text-body-sm">Register a land to see AI insights.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Lands */}
       {lands.length > 0 && (
-        <div className="anim-stagger" style={{ "--stagger-index": 3, marginTop: "var(--space-xl)" }}>
-          <div className="section-header">
-            <h2 className="section-header__title">Your Lands</h2>
-            <button className="btn btn--ghost btn--sm" onClick={() => navigate("/lands")}>
+        <div className="anim-stagger" style={{ "--stagger-index": 4 }}>
+          <div className="dashboard-section-head">
+            <h2 className="dashboard-section-head__title">Your Lands</h2>
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => navigate("/lands")}>
               View All →
             </button>
           </div>
-          <div className="grid-3">
-            {lands.slice(0, 6).map((land, i) => (
+
+          {/* Tablet: horizontal scroll chips */}
+          <div className="dashboard-lands-scroll">
+            {recentLands.map((land) => (
               <div
                 key={land.land_id}
-                className="land-card anim-stagger"
-                style={{ "--stagger-index": i + 4, cursor: "pointer" }}
-                onClick={() => navigate(`/lands/${land.land_id}`)}
+                className="dashboard-land-chip"
+                onClick={() => navigate(`/lands/${land.public_id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === "Enter" && navigate(`/lands/${land.public_id}`)}
               >
-                <div className="land-card__thumb">
-                  <div className="land-card__thumb-gradient" />
-                  <span className={`badge badge--${land.status === "ready" ? "healthy" : "warning"}`} style={{ position: "absolute", top: 12, right: 12 }}>
-                    <span className="badge__dot" />
-                    {land.status}
-                  </span>
-                </div>
-                <div className="land-card__body">
-                  <h3 className="land-card__name">{land.name}</h3>
-                  <div className="land-card__meta">
-                    <span>{land.area_hectares || "—"} ha</span>
-                    <span>{land.latitude.toFixed(3)}°N</span>
+                <div className={`dashboard-land-chip__thumb dashboard-land-chip__thumb--${landStatusClass(land.status)}`} />
+                <div className="dashboard-land-chip__body">
+                  <div className="dashboard-land-chip__name">{land.name}</div>
+                  <div className="dashboard-land-chip__meta">
+                    {land.area_hectares || "—"} ha · {(land.status || "active").split(":")[0]}
                   </div>
                 </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Phone: compact list rows */}
+          <div className="dashboard-lands-list">
+            {recentLands.map((land) => (
+              <div
+                key={land.land_id}
+                className="dashboard-land-row"
+                onClick={() => navigate(`/lands/${land.public_id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === "Enter" && navigate(`/lands/${land.public_id}`)}
+              >
+                <div className="dashboard-land-row__icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 6l9-4 9 4" />
+                    <path d="M3 6v12l9 4 9-4V6" />
+                  </svg>
+                </div>
+                <div className="dashboard-land-row__body">
+                  <div className="dashboard-land-row__name">{land.name}</div>
+                  <div className="dashboard-land-row__meta">
+                    {land.area_hectares || "—"} ha
+                    {land.latitude != null ? ` · ${Number(land.latitude).toFixed(2)}°N` : ""}
+                  </div>
+                </div>
+                <span className="dashboard-land-row__chevron">
+                  <ChevronRight />
+                </span>
               </div>
             ))}
           </div>

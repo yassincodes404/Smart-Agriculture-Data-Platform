@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, Numeric, String
 
 from app.models.user import Base
 
@@ -30,3 +30,5 @@ class LandCrop(Base):
     confidence = Column(Numeric(5, 4), nullable=True)      # ML confidence score 0-1
     zone_id = Column(Integer, ForeignKey("crop_zones.zone_id"), nullable=True, index=True)
     source_id = Column(Integer, ForeignKey("data_sources.source_id"), nullable=True)
+    trust_tier = Column(String(16), nullable=True)
+    is_synthetic = Column(Boolean, nullable=True, default=False)

@@ -1,68 +1,126 @@
 /**
- * components/ai/AIChatPanel.jsx
- * ------------------------------
- * A floating, collapsible AI chat panel for talking to Grok about a specific land.
- * Features:
- *  - Persisted chat history (loaded from and saved to the backend)
- *  - Typing indicator during AI response
- *  - Clear chat button
- *  - Markdown-like rendering for AI responses
+ * components/ai/AIChatPanel.jsx — AgriMind land-aware AI assistant
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
+import { useBreakpoint } from "../../hooks/useBreakpoint";
+import { useConfirm } from "../../context/ConfirmContext";
 import {
   getAiChatHistory,
   sendAiChatMessage,
   clearAiChatHistory,
 } from "../../services/api";
+import "./AIChatPanel.css";
 
-export default function AIChatPanel({ landId, onResize }) {
+const SUGGESTIONS = [
+  { icon: "🌡️", text: "Is the current temperature suitable for my crop?" },
+  { icon: "📈", text: "Does crop quality increase or decrease over time?" },
+  { icon: "🛰️", text: "Can you explain how NDVI is calculated?" },
+  { icon: "🌾", text: "What is the estimated harvest window for this land?" },
+];
+
+const TOPBAR_HEIGHT = 56;
+const BOTTOM_NAV_HEIGHT = 60;
+
+function LeafIcon({ size = 22 }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width={size} height={size}>
+      <path d="M11 20A7 7 0 019 6c.67-.67 1.45-1.12 2.3-1.36" />
+      <path d="M13 4c3.5 1.5 6 5 6 9a6 6 0 01-6 6" />
+      <path d="M12 22v-4" />
+    </svg>
+  );
+}
+
+function formatMessage(text) {
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n/g, "<br />");
+}
+
+export default function AIChatPanel({ landId, onResize, hasBottomNav = false, suppressLauncher = false }) {
+  const { isDrawer } = useBreakpoint();
+  const confirm = useConfirm();
+  const isMobileView = isDrawer;
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState(null);
-  
-  // Resizable Sidebar States
-  const [sidebarWidth, setSidebarWidth] = useState(420);
+  const [sidebarWidth, setSidebarWidth] = useState(400);
   const [isDragging, setIsDragging] = useState(false);
-  
-  useEffect(() => {
-    if (onResize) {
-      onResize({ isOpen, width: sidebarWidth });
-    }
-  }, [isOpen, sidebarWidth, onResize]);
-
   const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [mobilePanelHeight, setMobilePanelHeight] = useState(null);
+
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Load chat history when panel opens
-  useEffect(() => {
-    if (isOpen && !historyLoaded) {
-      loadHistory();
-    }
-    
-    const mainShell = document.querySelector('.app-shell__main');
-    
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-      if (mainShell) {
-        mainShell.style.paddingRight = "400px";
-        mainShell.style.transition = "padding-right 0.3s cubic-bezier(0.16, 1, 0.3, 1)";
-      }
+  const updateMobileHeight = useCallback(() => {
+    const vv = window.visualViewport;
+    const bottomOffset = hasBottomNav ? BOTTOM_NAV_HEIGHT : 0;
+    const safeBottom = parseInt(
+      getComputedStyle(document.documentElement).getPropertyValue("env(safe-area-inset-bottom)") || "0",
+      10
+    ) || 0;
+
+    if (vv) {
+      const avail = Math.max(280, vv.height - TOPBAR_HEIGHT - bottomOffset - safeBottom - 8);
+      setMobilePanelHeight(`${avail}px`);
     } else {
-      if (mainShell) mainShell.style.paddingRight = "0px";
+      const pct = hasBottomNav ? "72vh" : "82vh";
+      setMobilePanelHeight(pct);
     }
-    
-    // Cleanup on unmount
-    return () => {
-      if (mainShell) mainShell.style.paddingRight = "0px";
+  }, [hasBottomNav]);
+
+  useEffect(() => {
+    if (!isMobileView) {
+      setMobilePanelHeight(null);
+      return;
+    }
+    updateMobileHeight();
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener("resize", updateMobileHeight);
+      vv.addEventListener("scroll", updateMobileHeight);
+      return () => {
+        vv.removeEventListener("resize", updateMobileHeight);
+        vv.removeEventListener("scroll", updateMobileHeight);
+      };
+    }
+  }, [isMobileView, updateMobileHeight]);
+
+  useEffect(() => {
+    onResize?.({ isOpen, width: sidebarWidth, isMobile: isMobileView });
+  }, [isOpen, sidebarWidth, isMobileView, onResize]);
+
+  useEffect(() => {
+    if (!isMobileView || !isOpen) return;
+    const closeIfDrawerOpen = () => {
+      const shell = document.querySelector(".app-shell");
+      if (shell && !shell.classList.contains("app-shell--collapsed") && isDrawer) {
+        setIsOpen(false);
+      }
     };
+    const shellEl = document.querySelector(".app-shell");
+    const observer = shellEl
+      ? new MutationObserver(closeIfDrawerOpen)
+      : null;
+    observer?.observe(shellEl, { attributes: true, attributeFilter: ["class"] });
+    window.addEventListener("resize", closeIfDrawerOpen);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", closeIfDrawerOpen);
+    };
+  }, [isDrawer, isOpen, isMobileView]);
+
+  useEffect(() => {
+    if (isOpen && !historyLoaded) loadHistory();
+    if (isOpen) setTimeout(() => inputRef.current?.focus(), 150);
   }, [isOpen]);
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
@@ -73,45 +131,54 @@ export default function AIChatPanel({ landId, onResize }) {
       const res = await getAiChatHistory(landId);
       setMessages(res.messages || []);
       setHistoryLoaded(true);
-    } catch (err) {
+    } catch {
       setError("Could not load chat history.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSend = async () => {
-    const text = input.trim();
-    if (!text || isTyping) return;
+  const sendMessage = async (text) => {
+    const trimmed = text.trim();
+    if (!trimmed || isTyping) return;
 
-    const userMsg = { role: "user", content: text, message_id: Date.now() };
+    const userMsg = { role: "user", content: trimmed, message_id: Date.now() };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setIsTyping(true);
     setError(null);
+    if (inputRef.current) inputRef.current.style.height = "auto";
 
     try {
-      const res = await sendAiChatMessage(landId, text);
+      const res = await sendAiChatMessage(landId, trimmed);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content: res.content,
-          message_id: res.message_id,
-        },
+        { role: "assistant", content: res.content, message_id: res.message_id },
       ]);
     } catch (err) {
-      setError(err.message || "AI service unavailable. Check your API keys in Profile settings.");
+      setError(err.message || "AI service unavailable. Check API keys in Profile settings.");
     } finally {
       setIsTyping(false);
     }
   };
 
+  const handleSend = () => sendMessage(input);
+
+  const handleSuggestionClick = (text) => sendMessage(text);
+
   const handleClear = async () => {
-    if (!window.confirm("Clear all chat history for this land?")) return;
+    const confirmed = await confirm({
+      title: "Clear Chat History",
+      message: "Clear all chat history for this land?",
+      confirmLabel: "Clear",
+      cancelLabel: "Cancel",
+      variant: "danger",
+    });
+    if (!confirmed) return;
     await clearAiChatHistory(landId);
     setMessages([]);
     setHistoryLoaded(false);
+    if (inputRef.current) inputRef.current.style.height = "auto";
   };
 
   const handleKeyDown = (e) => {
@@ -121,361 +188,261 @@ export default function AIChatPanel({ landId, onResize }) {
     }
   };
 
-  // Simple text formatter: bold **text**, line breaks
-  const formatMessage = (text) => {
-    return text
-      .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\n/g, "<br />");
-  };
-
-  const handleMouseDown = (e) => {
+  const handleResizeStart = (e) => {
+    if (isMobileView) return;
     e.preventDefault();
     setIsDragging(true);
   };
 
   useEffect(() => {
-    if (!isDragging) return;
-    const handleMouseMove = (e) => {
-      let newWidth = window.innerWidth - e.clientX;
-      if (newWidth < 300) newWidth = 300;
-      if (newWidth > 800) newWidth = 800;
-      setSidebarWidth(newWidth);
+    if (!isDragging || isMobileView) return;
+    const onMove = (e) => {
+      let w = window.innerWidth - e.clientX;
+      setSidebarWidth(Math.min(620, Math.max(320, w)));
     };
-    const handleMouseUp = () => setIsDragging(false);
-    
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
+    const onUp = () => setIsDragging(false);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
     return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
     };
-  }, [isDragging]);
+  }, [isDragging, isMobileView]);
+
+  // Mobile: full-screen overlay (CSS). Portal escapes topbar stacking context.
+  const mobilePanelStyle = isMobileView ? undefined : { width: `${sidebarWidth}px` };
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.classList.add("ai-chat-open");
+    return () => {
+      document.body.style.overflow = prev;
+      document.documentElement.classList.remove("ai-chat-open");
+    };
+  }, [isOpen]);
+
+  const overlay = (
+    <>
+      {isOpen && (
+        <div
+          className={`ai-chat-backdrop${!isMobileView ? " ai-chat-backdrop--desktop" : ""}`}
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <div
+        className={[
+          "ai-chat-panel",
+          isMobileView ? "ai-chat-panel--mobile" : "ai-chat-panel--desktop",
+          isMobileView && hasBottomNav ? "ai-chat-panel--above-nav" : "",
+          isOpen ? "ai-chat-panel--open" : "ai-chat-panel--closed",
+          isDragging ? "ai-chat-panel--dragging" : "",
+        ].filter(Boolean).join(" ")}
+        style={mobilePanelStyle}
+        role="dialog"
+        aria-label="AgriMind AI chat"
+        aria-hidden={!isOpen}
+      >
+        {!isMobileView && (
+          <div className="ai-chat-resizer" onMouseDown={handleResizeStart} title="Drag to resize">
+            <div className="ai-chat-resizer__grip" />
+          </div>
+        )}
+
+        {isMobileView && (
+          <div className="ai-chat-grab">
+            <div className="ai-chat-grab__bar" />
+          </div>
+        )}
+
+        <header className="ai-chat-header">
+          <div className="ai-chat-header__brand">
+            <div className="ai-chat-header__logo">
+              <LeafIcon />
+            </div>
+            <div className="ai-chat-header__info">
+              <div className="ai-chat-header__title">AgriMind</div>
+              <div className="ai-chat-header__status">
+                <span className="ai-chat-header__status-dot" />
+                Land-aware agronomist
+              </div>
+            </div>
+          </div>
+          <div className="ai-chat-header__actions">
+            <button type="button" className="ai-chat-header__btn" onClick={handleClear} title="Clear history">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+              </svg>
+              Clear
+            </button>
+            <button
+              type="button"
+              className="ai-chat-header__btn ai-chat-header__btn--icon ai-chat-header__btn--close"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setIsOpen(false);
+              }}
+              aria-label="Close chat"
+            >
+              ✕
+            </button>
+          </div>
+        </header>
+
+        <div className="ai-chat-messages">
+          {loading && (
+            <div className="ai-chat-loading">
+              <div className="ai-chat-loading__spinner" />
+              Loading conversation…
+            </div>
+          )}
+
+          {!loading && messages.length === 0 && (
+            <div className="ai-chat-welcome">
+              <div className="ai-chat-welcome__hero">
+                <LeafIcon size={32} />
+              </div>
+              <h3 className="ai-chat-welcome__title">Your land agronomist</h3>
+              <p className="ai-chat-welcome__subtitle">
+                I know this land&apos;s NDVI, soil, climate, and crop data. Ask me anything.
+              </p>
+              <div className="ai-chat-suggestions">
+                {SUGGESTIONS.map((sug) => (
+                  <button
+                    key={sug.text}
+                    type="button"
+                    className="ai-chat-suggestion"
+                    onClick={() => handleSuggestionClick(sug.text)}
+                  >
+                    <span className="ai-chat-suggestion__icon">{sug.icon}</span>
+                    <span className="ai-chat-suggestion__text">{sug.text}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((msg) => (
+            <div
+              key={msg.message_id}
+              className={`ai-chat-msg ai-chat-msg--${msg.role}`}
+            >
+              {msg.role === "assistant" && (
+                <div className="ai-chat-msg__avatar ai-chat-msg__avatar--ai">
+                  <LeafIcon size={14} />
+                </div>
+              )}
+              <div
+                className={`ai-chat-msg__bubble ai-chat-msg__bubble--${msg.role}`}
+                dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
+              />
+            </div>
+          ))}
+
+          {isTyping && (
+            <div className="ai-chat-typing">
+              <div className="ai-chat-msg__avatar ai-chat-msg__avatar--ai">
+                <LeafIcon size={14} />
+              </div>
+              <div className="ai-chat-typing__bubble">
+                <span className="ai-chat-typing__dot" />
+                <span className="ai-chat-typing__dot" />
+                <span className="ai-chat-typing__dot" />
+              </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="ai-chat-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        <div className={`ai-chat-composer${hasBottomNav && isMobileView ? " ai-chat-composer--above-nav" : ""}`}>
+          <div className="ai-chat-composer__wrap">
+            <textarea
+              ref={inputRef}
+              className="ai-chat-composer__input"
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = "auto";
+                e.target.style.height = `${Math.min(e.target.scrollHeight, 100)}px`;
+              }}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask about this land…"
+              rows={1}
+            />
+            <button
+              type="button"
+              className="ai-chat-composer__send"
+              onClick={handleSend}
+              disabled={!input.trim() || isTyping}
+              aria-label="Send message"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
+          </div>
+          {!isMobileView && (
+            <p className="ai-chat-composer__hint">Enter to send · Shift+Enter for new line</p>
+          )}
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <>
-      {/* Floating button */}
+      {/* Launcher stays in-page; overlay is portaled above topbar */}
       <button
+        type="button"
         id="ai-chat-toggle"
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          position: "fixed",
-          bottom: 28,
-          right: 28,
-          width: 60,
-          height: 60,
-          borderRadius: "50%",
-          background: "linear-gradient(135deg, #f97316, #ea580c)",
-          border: "none",
-          cursor: "pointer",
-          boxShadow: "0 8px 32px rgba(249,115,22,0.4)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 1000,
-          transition: "transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease",
-          color: "#fff",
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = "scale(1.1) translateY(-4px)";
-          e.currentTarget.style.boxShadow = "0 12px 40px rgba(249,115,22,0.6)";
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = "scale(1) translateY(0)";
-          e.currentTarget.style.boxShadow = "0 8px 32px rgba(249,115,22,0.4)";
-        }}
-        title="Chat with AI Agronomist"
+        className={[
+          "ai-chat-launcher",
+          isMobileView ? "ai-chat-launcher--mobile" : "ai-chat-launcher--desktop",
+          !hasBottomNav && isMobileView ? "ai-chat-launcher--no-nav" : "",
+          isOpen || suppressLauncher ? "ai-chat-launcher--hidden" : "",
+        ].filter(Boolean).join(" ")}
+        onClick={() => setIsOpen(true)}
+        aria-label="Open AgriMind AI assistant"
       >
-        {isOpen ? (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 24, height: 24 }}>
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 28, height: 28 }}>
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-            <path d="M15 9h.01M9 9h.01M12 14h.01" />
-          </svg>
+        <span className="ai-chat-launcher__avatar">
+          <LeafIcon size={isMobileView ? 18 : 26} />
+        </span>
+        {isMobileView && (
+          <>
+            <span className="ai-chat-launcher__text">
+              <span className="ai-chat-launcher__title">AgriMind AI</span>
+              <span className="ai-chat-launcher__hint">Ask about NDVI, soil, irrigation…</span>
+            </span>
+            <span className="ai-chat-launcher__chevron" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="18 15 12 9 6 15" />
+              </svg>
+            </span>
+          </>
         )}
       </button>
 
-      {/* Chat sidebar */}
-      {isOpen && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            right: 0,
-            width: sidebarWidth,
-            height: "100vh",
-            backgroundColor: "rgba(255, 255, 255, 0.8)",
-            backdropFilter: "blur(24px)",
-            WebkitBackdropFilter: "blur(24px)",
-            borderLeft: "1px solid rgba(255,255,255,0.4)",
-            boxShadow: "-20px 0 60px rgba(0,0,0,0.1)",
-            zIndex: 1001, /* Above floating button and navbar */
-            display: "flex",
-            flexDirection: "column",
-            animation: "slideInRight 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
-            transition: isDragging ? "none" : "width 0.2s ease-out",
-          }}
-        >
-          {/* Drag Handle */}
-          <div
-            onMouseDown={handleMouseDown}
-            style={{
-              position: "absolute",
-              left: -4,
-              top: 0,
-              bottom: 0,
-              width: 8,
-              cursor: "ew-resize",
-              zIndex: 1002,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <div style={{ width: 4, height: 40, background: "rgba(0,0,0,0.2)", borderRadius: 2 }} />
-          </div>
-          {/* Header */}
-          <div
-            style={{
-              padding: "20px 24px",
-              background: "linear-gradient(135deg, var(--green-700), var(--green-950))",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexShrink: 0,
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span style={{ fontSize: 20 }}>✨</span>
-              <div>
-                <div style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>
-                  AgriMind AI
-                </div>
-                <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11 }}>
-                  Powered by Groq · Farm-specific context
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={handleClear}
-                style={{
-                  background: "rgba(255,255,255,0.15)",
-                  border: "none",
-                  borderRadius: "var(--radius-sm)",
-                  color: "#fff",
-                  fontSize: 11,
-                  padding: "4px 10px",
-                  cursor: "pointer",
-                }}
-                title="Clear chat history"
-              >
-                Clear
-              </button>
-              <button
-                onClick={() => setIsOpen(false)}
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  color: "#fff",
-                  fontSize: 20,
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 24,
-                  height: 24,
-                }}
-                title="Close Sidebar"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div
-            style={{
-              flex: 1,
-              overflowY: "auto",
-              padding: "var(--space-md)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--space-sm)",
-            }}
-          >
-            {loading && (
-              <div style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: 13 }}>
-                Loading history…
-              </div>
-            )}
-
-            {!loading && messages.length === 0 && (
-              <div
-                style={{
-                  textAlign: "center",
-                  color: "var(--text-secondary)",
-                  fontSize: 13,
-                  marginTop: "var(--space-xl)",
-                  lineHeight: 1.6,
-                }}
-              >
-                <div style={{ fontSize: 32, marginBottom: 8 }}>🌾</div>
-                <strong>Ask me anything about this farm!</strong>
-                <br />
-                <span style={{ fontSize: 12, opacity: 0.7 }}>
-                  Try: "Why did NDVI drop last month?" or "When should I irrigate?"
-                </span>
-              </div>
-            )}
-
-            {messages.map((msg) => (
-              <div
-                key={msg.message_id}
-                style={{
-                  display: "flex",
-                  justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-                }}
-              >
-                <div
-                  style={{
-                    maxWidth: "80%",
-                    padding: "var(--space-sm) var(--space-md)",
-                    borderRadius:
-                      msg.role === "user"
-                        ? "20px 20px 4px 20px"
-                        : "4px 20px 20px 20px",
-                    background:
-                      msg.role === "user"
-                        ? "linear-gradient(135deg, var(--green-500), var(--green-600))"
-                        : "rgba(255,255,255,0.9)",
-                    color: msg.role === "user" ? "#fff" : "var(--text-primary)",
-                    fontSize: 14,
-                    lineHeight: 1.5,
-                    border: msg.role === "assistant" ? "1px solid rgba(0,0,0,0.05)" : "none",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-                  }}
-                  dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }}
-                />
-              </div>
-            ))}
-
-            {/* Typing indicator */}
-            {isTyping && (
-              <div style={{ display: "flex", justifyContent: "flex-start" }}>
-                <div
-                  style={{
-                    padding: "var(--space-sm) var(--space-md)",
-                    borderRadius: "4px 20px 20px 20px",
-                    background: "rgba(255,255,255,0.9)",
-                    border: "1px solid rgba(0,0,0,0.05)",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
-                    display: "flex",
-                    gap: 4,
-                    alignItems: "center",
-                  }}
-                >
-                  {[0, 1, 2].map((i) => (
-                    <div
-                      key={i}
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: "50%",
-                        background: "var(--green-500)",
-                        animation: `bounce 1.2s cubic-bezier(0.34, 1.56, 0.64, 1) ${i * 0.2}s infinite`,
-                      }}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {error && (
-              <div
-                style={{
-                  background: "var(--error-light)",
-                  border: "1px solid var(--error-border)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "var(--space-sm) var(--space-md)",
-                  fontSize: 12,
-                  color: "var(--error)",
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Input */}
-          <div
-            style={{
-              padding: "var(--space-sm) var(--space-md)",
-              borderTop: "1px solid var(--border-subtle)",
-              display: "flex",
-              gap: "var(--space-sm)",
-              flexShrink: 0,
-              background: "var(--bg-card)",
-            }}
-          >
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about this farm…"
-              rows={1}
-              style={{
-                flex: 1,
-                resize: "none",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: "var(--radius-md)",
-                padding: "8px 12px",
-                fontSize: 13,
-                background: "var(--bg-input)",
-                color: "var(--text-primary)",
-                outline: "none",
-                lineHeight: 1.5,
-              }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!input.trim() || isTyping}
-              style={{
-                background: "linear-gradient(135deg, #f97316, #ea580c)",
-                border: "none",
-                borderRadius: "var(--radius-md)",
-                color: "#fff",
-                width: 36,
-                flexShrink: 0,
-                cursor: input.trim() && !isTyping ? "pointer" : "not-allowed",
-                opacity: input.trim() && !isTyping ? 1 : 0.5,
-                fontSize: 16,
-                transition: "opacity 0.2s",
-              }}
-              title="Send message"
-            >
-              ↑
-            </button>
-          </div>
-        </div>
-      )}
-
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes slideInRight {
-          from { transform: translateX(100%); }
-          to { transform: translateX(0); }
-        }
-        @keyframes bounce {
-          0%, 80%, 100% { transform: translateY(0); }
-          40% { transform: translateY(-4px); }
-        }
-      `}} />
+      {typeof document !== "undefined"
+        ? createPortal(overlay, document.body)
+        : overlay}
     </>
   );
 }

@@ -174,10 +174,6 @@ def run_ai_land_analysis(land_id: int, db: Session, user_id: Optional[int] = Non
 
     client = GroqClient(db, user_id)
 
-    # Delete previous auto-generated insights for this land to keep them fresh
-    db.query(LandAiInsight).filter(LandAiInsight.land_id == land_id).delete()
-    db.flush()
-
     insights_created = []
 
     # ---- Single Combined Prompt to Save API Quota ----
@@ -239,6 +235,10 @@ Farm data context:
     )
 
     if combined_insight and combined_insight.structured_data:
+        # Delete previous auto-generated insights for this land to keep them fresh
+        db.query(LandAiInsight).filter(LandAiInsight.land_id == land_id).delete()
+        db.flush()
+        
         # The _request_insight helper saved the combined insight into the DB. 
         # But we actually want to split it into 4 rows and delete the combined one.
         db.delete(combined_insight)

@@ -30,5 +30,10 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // Development headers - relax CSP so Vite HMR, React Fast Refresh,
+    // Recharts and Leaflet (which use new Function / eval internally) work.
+    headers: {
+      'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline' http: https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; connect-src 'self' ws: wss: http: https:; font-src 'self' https:; object-src 'none'; base-uri 'self';",
+    },
   },
 })

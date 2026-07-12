@@ -1,5 +1,8 @@
-FROM mysql:8.0
+FROM postgres:14
 
-# Set environment variables if needed, though they are usually in .env
-# or docker-compose.yml.
-# This Dockerfile can be used for custom configurations.
+# Init scripts are mounted via docker-compose into
+# /docker-entrypoint-initdb.d/ — PostgreSQL runs them automatically
+# on first container start in alphabetical order.
+#
+# Environment variables (POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD)
+# are supplied by .env.db via docker-compose.

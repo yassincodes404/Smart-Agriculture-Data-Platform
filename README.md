@@ -8,39 +8,37 @@ The project was recently restructured to provide a clean, microservices-oriented
 
 ### Core Services
 
-The platform consists of **6 Dockerized Containers** orchestrated via `docker-compose`:
+The platform uses a clean **multi-container architecture** (preferred over single-container) orchestrated via `docker-compose.yml`:
 
 1. **`agri_nginx`** (Reverse Proxy)
    - **Tech Stack**: NGINX
-   - **Role**: Serves as the primary API Gateway and reverse proxy.
-   - **Internal Routing**:
-     - `/` -> Routes to the Frontend application.
-     - `/api/` -> Routes to the FastAPI Backend.
+   - **Role**: API Gateway and reverse proxy.
+   - **Routing**:
+     - `/api/` -> FastAPI Backend (port 8000)
+     - `/` + HMR -> Frontend Vite dev server (port 5173)
    - **Exposed Port**: `80`
 
 2. **`agri_frontend`** (Web Client)
    - **Tech Stack**: React + Vite + Node.js
-   - **Role**: The main user interface for visualizing agricultural data. Vite ensures blazing fast hot-reload during development.
-   - **Exposed Port**: `5173`
+   - **Role**: UI. Supports hot-reload in development via volume mount.
+   - **Exposed Port**: `5173` (internal)
 
 3. **`agri_backend`** (REST API)
-   - **Tech Stack**: Python 3.11, FastAPI, Uvicorn, SQLAlchemy
-   - **Role**: Core application logic, data querying, and REST endpoints.
+   - **Tech Stack**: Python 3.11, FastAPI, Uvicorn, SQLAlchemy, Pandas + xlsxwriter
+   - **Role**: Core logic, lands, analytics, pipelines, AI.
    - **Exposed Port**: `8000`
 
-4. **`agri_mysql`** (Relational Database)
-   - **Tech Stack**: MySQL 8.0
-   - **Role**: Primary data store for the application. Data is persistently stored in a Docker volume (`mysql_data`). Isolated within its own `Database/` directory to manage initialisation and schemas.
-   - **Host Port Mapping**: `3307` (Mapped from internal `3306` to avoid conflicts with host databases)
+4. **`agri_postgres`** (Relational Database)
+   - **Tech Stack**: PostgreSQL 14
+   - **Role**: Primary data store. Initialized via Database/init.sql + seed.sql. Persistent volume.
+   - **Internal Port**: 5432 (mapped to host 5432)
 
-5. **`agri_scheduler`** (Background Monitoring Scheduler)
-   - **Tech Stack**: Python 3.11, APScheduler, SQLAlchemy
-   - **Role**: Runs scheduled land-monitoring pipeline jobs and keeps geospatial time-series tables updated.
-   - **Deployment Model**: Reuses the backend image with a scheduler entrypoint (`python -m app.scheduler.runner`).
+5. **`agri_scheduler`** (Background Scheduler)
+   - **Tech Stack**: Python 3.11 + APScheduler (reuses backend image)
+   - **Role**: Periodic land monitoring jobs.
+   - **Command**: `python -m app.scheduler.runner`
 
-6. **`agri_cv`** (Computer Vision Worker Environment)
-   - **Tech Stack**: Python 3.11, OpenCV, Pillow, NumPy
-   - **Role**: A standalone Python environment explicitly designed for heavy image processing tasks and computer vision algorithms. It mounts local image directories to operate on raw visual data.
+A single-container `Dockerfile` (at root) also exists for simplified deploys (e.g. some Azure scenarios) that bundles built frontend + backend. **Multi-container is the recommended approach** for maintainability and separation of concerns.
 
 ---
 
@@ -94,7 +92,36 @@ Smart-Agriculture-Data-Platform/
 ### Prerequisites
 - [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/install/)
 
-### Launching the Application
+### Launching the Application (Multi-Container)
+
+**Recommended on Windows:**
+
+```powershell
+# From project root
+.\rebuild.ps1
+```
+
+Or manually:
+
+```powershell
+docker compose build --no-cache
+docker compose up -d
+```
+
+Then open http://localhost
+
+To view logs:
+```powershell
+docker compose logs -f backend
+docker compose logs -f scheduler
+```
+
+### Verifying the recent fixes
+- Register a **new land**.
+- Go to its detail page → **NDVI Vegetation Index** chart/section should appear (synthetic fallback is used if real Sentinel data is unavailable at creation time).
+- Click the **Export** button → it should download a `.xlsx` file (with summary + data sheets).
+
+---
 
 To build and start all containers in the background, run:
 

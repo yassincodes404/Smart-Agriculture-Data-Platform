@@ -14,6 +14,7 @@ All logic lives in users/service.py.
 """
 
 from fastapi import APIRouter, Depends, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core import security
@@ -27,6 +28,16 @@ from app.users.schemas import (
     UserLogin,
     UserResponse,
 )
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+    model_config = {"extra": "forbid"}
+
+
+class GoogleAuthRequest(BaseModel):
+    """Body for POST /auth/google — the ID token from Google Identity Services."""
+    credential: str  # This is the ID token from Google
+    model_config = {"extra": "forbid"}
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -47,7 +58,7 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
 
     - **email**: must be unique
     - **password**: minimum 8 characters
-    - **role**: admin | analyst | viewer (default: viewer)
+    - **role**: analyst | viewer only (admin role cannot be created via this endpoint)
     """
     user = user_service.register_user(db, user_in)
     return APIResponse(
@@ -74,10 +85,25 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
     for all protected endpoints.
     """
     user = user_service.authenticate_user(db, credentials.email, credentials.password)
-    token = security.create_access_token(data={"sub": str(user.user_id)})
+    access_token = security.create_access_token(data={"sub": str(user.user_id)})
+    refresh_token = security.create_refresh_token(data={"sub": str(user.user_id)})
+
+    # Log real activity (visible only to admins)
+    user_service.record_activity(
+        db,
+        user.user_id,
+        "login",
+        target_type="user",
+        target_id=user.user_id,
+        details={"email": user.email},
+    )
+
     return APIResponse(
         status="success",
-        data=TokenResponse(access_token=token).model_dump(),
+        data=TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+        ).model_dump(),
         message="Login successful.",
     )
 
@@ -123,4 +149,80 @@ def logout(current_user: Optional[User] = Depends(get_current_user_optional)):
     return APIResponse(
         status="success",
         message=f"User {email} logged out. Discard your token.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/refresh   (Auth v2)
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/refresh",
+    response_model=APIResponse,
+    summary="Refresh access token using a valid refresh token",
+)
+def refresh_token(body: RefreshRequest, db: Session = Depends(get_db)):
+    """
+    Takes a refresh_token and returns a new access_token (and new refresh_token).
+    """
+    try:
+        payload = security.decode_refresh_token(body.refresh_token)
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+        user = user_service.get_user_by_id(db, int(user_id))
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not active")
+
+        new_access = security.create_access_token(data={"sub": str(user.user_id)})
+        new_refresh = security.create_refresh_token(data={"sub": str(user.user_id)})
+
+        return APIResponse(
+            status="success",
+            data=TokenResponse(access_token=new_access, refresh_token=new_refresh).model_dump(),
+            message="Token refreshed",
+        )
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/google   — Sign in / Sign up with Google (OAuth 2.0 ID token)
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/google",
+    response_model=APIResponse,
+    summary="Sign in or sign up using Google ID token",
+)
+def google_auth(body: GoogleAuthRequest, db: Session = Depends(get_db)):
+    """
+    Accepts a Google ID token (from Google Identity Services on the frontend).
+
+    - If the email exists → logs the user in.
+    - If the email does not exist → creates a new user account (role=viewer).
+    """
+    user = user_service.authenticate_with_google(db, body.credential)
+
+    access_token = security.create_access_token(data={"sub": str(user.user_id)})
+    refresh_token = security.create_refresh_token(data={"sub": str(user.user_id)})
+
+    # Log activity
+    user_service.record_activity(
+        db,
+        user.user_id,
+        "login",
+        target_type="user",
+        target_id=user.user_id,
+        details={"email": user.email, "provider": "google"},
+    )
+
+    return APIResponse(
+        status="success",
+        data=TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+        ).model_dump(),
+        message="Google authentication successful.",
     )
