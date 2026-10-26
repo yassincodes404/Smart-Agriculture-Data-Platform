@@ -2,6 +2,54 @@
 
 A scalable, containerized architecture for agricultural data processing, analysis, and visualization.
 
+<p align="center">
+  <strong>AgriData Egypt</strong><br />
+  Satellite-powered field monitoring, crop intelligence, and land management in one workspace.
+</p>
+
+## Product Tour
+
+### Watch the product film
+
+<p align="center">
+  <a href="docs/media/agri-promo-wide.mp4"><img src="docs/media/agri-poster.png" alt="Play the 45-second AgriData Egypt product film" width="100%" /></a>
+</p>
+
+**[Watch the 16:9 film](docs/media/agri-promo-wide.mp4)** · **[Watch the 9:16 vertical cut](docs/media/agri-promo-vertical.mp4)**
+
+<p align="center">
+  <a href="docs/media/agri-promo-vertical.mp4"><img src="docs/media/agri-poster-vertical.png" alt="Play the vertical AgriData Egypt product film" width="220" /></a><br />
+  <sub>Vertical cut for mobile viewing</sub>
+</p>
+
+### Explore the interface
+
+The screenshots below show the application running with sample agricultural data. Open any image to view it at full resolution.
+
+<p align="center">
+  <a href="docs/media/screenshots/01-dashboard.png"><img src="docs/media/screenshots/01-dashboard.png" alt="AgriData Egypt dashboard with land metrics, vegetation trends, and portfolio overview" width="100%" /></a>
+</p>
+
+<table>
+  <tr>
+    <td width="50%"><a href="docs/media/screenshots/02-lands-explorer.png"><img src="docs/media/screenshots/02-lands-explorer.png" alt="Lands Explorer with satellite-backed field cards" width="100%" /></a><br /><strong>Land portfolio</strong><br />Browse registered parcels and jump into a field at a glance.</td>
+    <td width="50%"><a href="docs/media/screenshots/03-field-metrics.png"><img src="docs/media/screenshots/03-field-metrics.png" alt="Land detail page with crop metrics and vegetation data" width="100%" /></a><br /><strong>Field intelligence</strong><br />Review crop health, growing conditions, and land-level analytics.</td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/media/screenshots/04-satellite-view.png"><img src="docs/media/screenshots/04-satellite-view.png" alt="Satellite imagery and acquisition timeline for a monitored field" width="100%" /></a><br /><strong>Satellite monitoring</strong><br />Inspect parcel boundaries, imagery, and observation history.</td>
+    <td width="50%"><a href="docs/media/screenshots/03b-vegetation-indices.png"><img src="docs/media/screenshots/03b-vegetation-indices.png" alt="Vegetation indices and crop composition cards" width="100%" /></a><br /><strong>Vegetation insights</strong><br />Track NDVI trends and review crop health signals over time.</td>
+  </tr>
+  <tr>
+    <td width="50%"><a href="docs/media/screenshots/05-climate-history.png"><img src="docs/media/screenshots/05-climate-history.png" alt="Field climate monitoring and environmental readings" width="100%" /></a><br /><strong>Climate context</strong><br />See environmental conditions alongside field performance.</td>
+    <td width="50%"><a href="docs/media/screenshots/07-register-land.png"><img src="docs/media/screenshots/07-register-land.png" alt="Register a new land by drawing its boundary on a map" width="100%" /></a><br /><strong>Map-based registration</strong><br />Draw a field boundary and configure its monitoring variables.</td>
+  </tr>
+</table>
+
+<p align="center">
+  <a href="docs/media/screenshots/06-compare-lands.png"><img src="docs/media/screenshots/06-compare-lands.png" alt="Side-by-side land comparison with vegetation and field metrics" width="100%" /></a><br />
+  <strong>Compare fields</strong> — inspect multiple parcels side by side.
+</p>
+
 ## 🏗️ Architecture & Project State
 
 The project was recently restructured to provide a clean, microservices-oriented environment. Background jobs, task queues (Celery/Redis), and object storage references have been intentionally removed to streamline the platform around a lightweight REST API and direct database integration.
