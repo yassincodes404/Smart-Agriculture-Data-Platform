@@ -12,15 +12,22 @@ A scalable, containerized architecture for agricultural data processing, analysi
 ### Watch the product film
 
 <p align="center">
-  <a href="docs/media/agri-promo-wide.mp4"><img src="docs/media/agri-poster.png" alt="Play the 45-second AgriData Egypt product film" width="100%" /></a>
+  <img src="docs/media/agri-poster.png" alt="AgriData Egypt product film poster" width="100%" />
 </p>
 
-**[Watch the 16:9 film](docs/media/agri-promo-wide.mp4)** · **[Watch the 9:16 vertical cut](docs/media/agri-promo-vertical.mp4)**
+https://github.com/user-attachments/assets/41b0f34f-0732-469a-9ff1-fdf6498fe75c
+
+[Download the full-resolution 16:9 film](docs/media/agri-promo-wide.mp4)
+
+### Vertical cut
 
 <p align="center">
-  <a href="docs/media/agri-promo-vertical.mp4"><img src="docs/media/agri-poster-vertical.png" alt="Play the vertical AgriData Egypt product film" width="220" /></a><br />
-  <sub>Vertical cut for mobile viewing</sub>
+  <img src="docs/media/agri-poster-vertical.png" alt="AgriData Egypt vertical product film poster" width="220" />
 </p>
+
+https://github.com/user-attachments/assets/e9b1e84f-bec2-42d9-8d52-1cd73180834c
+
+[Download the full-resolution 9:16 film](docs/media/agri-promo-vertical.mp4)
 
 ### Explore the interface
 
